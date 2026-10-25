@@ -1,0 +1,159 @@
+// Bite: run a workflow saved from Bite's editor on a folder of images.
+//
+// The work is done by bite, the command line tool installed beside the editor. Its command
+// line, exit codes and report are in Bite's README (Command Line) and `bite --help`, and it
+// keeps the CLI contract (N32): exit 2 when it cannot follow the command line, 0 only when
+// every image worked, 1 otherwise, and a report file whose fields become this add-on's
+// results. The report's option is --run-report, not --report: the workflow's own CLI names
+// share Bite's command line, and `report` is a likely one for a Text Output.
+//
+// A workflow names its own inputs and outputs (--input-1, --output-image-1...), so the step
+// asks `bite describe` for them, then gives the folder of images to the input and Save to to
+// every output.
+add-on "bite" name="Bite" version="1.0" requires="0.2" icon="image" {
+    about "Run workflows saved from Bite on folders of images: resize, convert, adjust and more, with ImageMagick."
+    suggest-if {
+        glob "*.bite"
+        glob "*/*.bite"
+    }
+    step "run-workflow" name="Run a Bite workflow" says="Run {workflow} on the images in {images}" {
+        about "Runs a workflow saved from Bite on every image in a folder, and saves what it makes in another folder."
+        search-words "bite" "workflow" "images" "pictures" "photos" "textures" "batch" "resize" "convert" "image processing" "imagemagick" "png" "jpg"
+        comes-next "files.show-in-folder"
+        setting "workflow" type="file" extensions="bite" required=#true label="Workflow" help="A workflow saved from Bite (File > Save Workflow)."
+        setting "images" type="folder" required=#true label="Images" help="A folder of images. Bite works on the images in it, not those in the folders inside it."
+        setting "save-to" type="folder" required=#true label="Save to" help="What the workflow makes goes here, whatever its outputs say in Bite."
+        setting "if-there" type="choice" starts="Do as the workflow says" label="If the files are already there" help="The workflow's outputs skip them, unless one was set to overwrite in Bite." {
+            option "Do as the workflow says"
+            option "Replace them"
+        }
+        setting "stop" type="tick-box" starts=#true label="Stop the tool when an image doesn't work" help="Turn it off to carry on: the images that didn't work become a result, for a next step to list."
+        setting "jobs" type="number" label="How many at once" help="How many images Bite works on at the same time. Leave it empty for one per processor core." advanced=#true
+        setting "report" type="file" extensions="json" label="Save the full report to" help="A JSON file listing every file made and every image that didn't work, and why, for a script or a pipeline." advanced=#true
+        result "files" type="files" label="Files saved"
+        result "failed-images" type="files" item="image" label="Images that didn't work"
+        result "processed" type="number" label="How many were done"
+        result "skipped" type="number" label="How many were skipped"
+        result "failed" type="number" label="How many didn't work"
+        explain "no decode delegate" "Bite can't read some of these images: the ImageMagick it comes with doesn't know their format. Move them out of the folder, or save them as PNG, JPEG or TIFF, then try again."
+        explain "improper image header" "Some files aren't the images their names say, or they're damaged. Open them to check, or move them out of the folder."
+        explain "No images found in" "There are no images in that folder. Bite looks in the folder itself, not in the folders inside it."
+        script #"""
+            local function given(value) return value ~= nil and trim(tostring(value)) ~= "" end
+            -- Where Bite is installed: its folder on Windows, its .app on macOS.
+            local function install()
+                local places = {}
+                if os.name == "windows" then
+                    local key = "\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{7F3A9C41-5D82-4E17-9B6C-2A8E4D1F0C93}_is1"
+                    for _, root in ipairs({ "HKCU", "HKLM" }) do
+                        local ok, out = pcall(capture, "reg", "query", root .. key, "/v", "InstallLocation")
+                        local folder = ok and out:match("InstallLocation%s+REG_SZ%s+([^\r\n]+)")
+                        if folder then table.insert(places, trim(folder)) end
+                    end
+                    if env.LOCALAPPDATA then table.insert(places, path.join(env.LOCALAPPDATA, "Programs", "Bite")) end
+                    if env.ProgramFiles then table.insert(places, path.join(env.ProgramFiles, "Bite")) end
+                else
+                    local ok, out = pcall(capture, "mdfind", "kMDItemCFBundleIdentifier == 'com.bite.app'")
+                    for app in (ok and out or ""):gmatch("[^\r\n]+") do table.insert(places, app) end
+                    table.insert(places, "/Applications/Bite.app")
+                    if env.HOME then table.insert(places, path.join(env.HOME, "Applications", "Bite.app")) end
+                end
+                for _, place in ipairs(places) do
+                    if exists(place) then return place end
+                end
+            end
+            local function cli()
+                local ok, found = pcall(capture, os.name == "windows" and "where" or "which", "bite")
+                if ok and given(found) then return trim(split(found, "\n")[1]) end
+                local place = install()
+                local tool = place and (os.name == "windows" and path.join(place, "bite.exe")
+                    or path.join(place, "Contents", "MacOS", "bite"))
+                if tool and exists(tool) then return tool end
+                fail("Bite isn't installed on this computer. Install it, then try again.")
+            end
+
+            local tool = cli()
+            local workflow = path.absolute(settings.workflow)
+            local save_to = path.absolute(settings["save-to"])
+
+            -- The workflow's inputs and outputs, by the CLI names whoever made it chose in Bite.
+            local ok, described = pcall(capture, tool, "describe", workflow)
+            if not ok then
+                -- A Bite without describe has no --version either.
+                if not pcall(capture, tool, "--version") then
+                    fail("This Bite is too old to run workflows for Launcher. Install the latest Bite, then try again.")
+                end
+                fail("Bite couldn't read the workflow: " .. (tostring(described):match("%[Bite%] ([^\r\n]+)") or "the details say why."))
+            end
+            local endpoints = json.decode(described)
+            -- An Input that no output reads from needs no folder.
+            local inputs = {}
+            for _, input in ipairs(endpoints.inputs or {}) do
+                if input.required then table.insert(inputs, input) end
+            end
+            if #inputs == 0 then
+                fail("This workflow doesn't read any images: none of its outputs is connected to an Input. Connect one in Bite, then try again.")
+            elseif #inputs > 1 then
+                fail(string.format("This workflow reads images from %d Inputs, and this step gives it one folder. Use a workflow with one Input.", #inputs))
+            elseif not given(inputs[1].name) then
+                fail("The workflow's Input has no CLI name. Give it one in Bite's Inspector, save the workflow, then try again.")
+            end
+
+            local args = { "run", workflow }
+            local function add(option, value) table.insert(args, option); table.insert(args, value) end
+            add("--" .. inputs[1].name, path.absolute(settings.images))
+            -- Everything the workflow makes goes to Save to: an Image Output's files straight in,
+            -- a Text or Flipbook Output's one file under the name the workflow gives it.
+            for _, output in ipairs(endpoints.outputs or {}) do
+                if not given(output.name) then
+                    fail(string.format("The workflow's output \"%s\" has no CLI name, so what it makes can't go to Save to. Give it one in Bite's Inspector, save the workflow, then try again.", output.label))
+                end
+                if output.takes == "folder" then
+                    add("--" .. output.name, save_to)
+                else
+                    local name = given(output.path) and path.basename(output.path)
+                        or output.name .. (output.kind == "text" and ".txt" or ".png")
+                    add("--" .. output.name, path.join(save_to, name))
+                end
+            end
+            if settings["if-there"] == "Replace them" then table.insert(args, "--overwrite") end
+            local jobs = tonumber(settings.jobs)
+            if jobs and jobs >= 1 then add("--jobs", tostring(math.min(math.floor(jobs), 256))) end
+            local report = given(settings.report) and path.absolute(settings.report) or path.join(env.TEMP or env.TMPDIR or config_dir,
+                string.format("bite-%d-%d.json", os.time(), math.floor(os.clock() * 1000000)))
+            add("--run-report", report)
+            table.insert(args, { check = false })
+
+            local code = run(tool, table.unpack(args)).exit_code
+            local read, text = pcall(read_file, report)
+            if not given(settings.report) then delete(report) end
+            if not read then
+                fail(code == 2 and "Bite couldn't use these settings. The details say which one."
+                    or "Bite stopped before it finished. The details say why.")
+            end
+            local result = json.decode(text)
+            if result.problem then fail(result.problem) end
+            -- An image fails once for each output it goes through: list it once.
+            local failed, seen = {}, {}
+            for _, failure in ipairs(result.failures or {}) do
+                if not seen[failure.file] then
+                    seen[failure.file] = true
+                    table.insert(failed, failure.file)
+                end
+            end
+            if code ~= 0 then
+                if #failed == 0 then fail("Bite stopped before it finished. The details say why.") end
+                local said = string.format("%d %s didn't work.", #failed, #failed == 1 and "image" or "images")
+                if settings.stop then fail(said .. " The details say why.") end
+                log(said)
+            end
+            return {
+                files = result.outputs or {},
+                ["failed-images"] = failed,
+                processed = result.processed,
+                skipped = result.skipped,
+                failed = #failed,
+            }
+            """#
+    }
+}

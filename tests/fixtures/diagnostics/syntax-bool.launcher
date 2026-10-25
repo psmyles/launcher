@@ -1,0 +1,3 @@
+layout {
+    checkbox "tests" label="Run tests" default=true
+}

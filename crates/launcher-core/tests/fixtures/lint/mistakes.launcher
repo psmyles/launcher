@@ -1,0 +1,23 @@
+// Lua mistakes, each on a line the golden output names.
+script #"""
+    function branches()
+        local unused = 1
+        return split(capture("git", "branch"), "\n")
+    end
+    """#
+
+layout {
+    dropdown "branch" label="Branch" options=(lua)"branches()"
+    checkbox "tests" label="Tests" visible-if="values.brnach ~= ''"
+    text "note" label="Note" default=(lua)"trim()"
+}
+
+action "go" {
+    lua #"""
+        local x = 1
+        local x = 2
+        log(x, values.tests)
+        undefined_thing()
+        """#
+    log (lua)"values.branch .."
+}

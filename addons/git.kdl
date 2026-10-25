@@ -1,0 +1,157 @@
+// Git: the everyday Git actions, named as Git GUIs name them, explained in plain words.
+add-on "git" name="Git" version="1.0" requires="0.2" icon="git" {
+    about "Get, switch and share versions of a project kept with Git."
+    suggest-if {
+        exists ".git"
+    }
+    list "branches" {
+        about "The project's branches, on the server and on this computer, most recently changed first."
+        setting "folder" type="folder" starts="." label="Project folder"
+        script #"""
+            local seen, list = {}, {}
+            local function add(out)
+                for name in out:gmatch("[^\r\n]+") do
+                    if name ~= "HEAD" and not seen[name] then
+                        seen[name] = true
+                        table.insert(list, name)
+                    end
+                end
+            end
+            add(capture("git", "-C", settings.folder, "for-each-ref", "--sort=-committerdate",
+                "--format=%(refname:lstrip=3)", "refs/remotes/origin"))
+            add(capture("git", "-C", settings.folder, "for-each-ref", "--sort=-committerdate",
+                "--format=%(refname:lstrip=2)", "refs/heads"))
+            return list
+            """#
+    }
+    step "no-unsaved-changes" name="No unsaved changes" says="Make sure there are no unsaved changes" check-step=#true {
+        about "Stops before anything happens if the project has changes that aren't committed."
+        search-words "clean" "dirty" "local changes" "status"
+        setting "folder" type="folder" starts="." label="Project folder" advanced=#true
+        needs {
+            app "git" help="Install Git from https://git-scm.com/downloads"
+        }
+        does {
+            check "git" "-C" "{folder}" "diff" "--quiet" message="The project has changes that aren't committed. Commit or stash them first."
+            check "git" "-C" "{folder}" "diff" "--cached" "--quiet" message="The project has changes that aren't committed. Commit or stash them first."
+        }
+    }
+    step "fetch" name="Fetch" says="Check the server for new changes" {
+        about "Finds out what changed on the server, without changing your files."
+        search-words "update" "refresh" "remote"
+        comes-next "git.switch-branch" "git.pull"
+        setting "folder" type="folder" starts="." label="Project folder" advanced=#true
+        needs {
+            app "git" help="Install Git from https://git-scm.com/downloads"
+        }
+        does {
+            run "git" "-C" "{folder}" "fetch" "--prune" "origin"
+        }
+    }
+    step "switch-branch" name="Switch branch" says="Switch to {branch}" {
+        about "Moves the project to another branch."
+        search-words "checkout" "change branch" "choose a branch" "pick a branch"
+        comes-next "git.pull"
+        setting "branch" type="choice" required=#true label="Branch" help="The branch to switch to." {
+            list-from "git.branches" folder="{folder}"
+        }
+        setting "folder" type="folder" starts="." label="Project folder" advanced=#true
+        result "previous" label="Branch before"
+        needs {
+            app "git" help="Install Git from https://git-scm.com/downloads"
+        }
+        explain "would be overwritten" "You have changes that aren't committed. Commit or stash them first."
+        explain "invalid reference" "That branch doesn't exist. Fetch first, or pick another branch."
+        does {
+            capture "git" "-C" "{folder}" "branch" "--show-current" id="was"
+            run "git" "-C" "{folder}" "switch" "{branch}"
+            set "previous" "{was.output}"
+        }
+    }
+    step "pull" name="Pull" says="Get the latest changes" {
+        about "Gets the latest changes from the server into the project."
+        search-words "update" "get latest" "download changes" "sync"
+        comes-next "git.switch-branch"
+        setting "folder" type="folder" starts="." label="Project folder" advanced=#true
+        setting "ff-only" type="tick-box" starts=#true label="Only update when no merge is needed" advanced=#true
+        result "commit" label="Latest change"
+        needs {
+            app "git" help="Install Git from https://git-scm.com/downloads"
+        }
+        explain "would be overwritten" "You have changes that aren't committed. Commit or stash them first."
+        explain "not possible to fast-forward" "Your branch and the server's have both changed. Ask someone who knows Git to merge them."
+        does {
+            run "git" "-C" "{folder}" "pull" "--ff-only" if="settings['ff-only']"
+            run "git" "-C" "{folder}" "pull" if="not settings['ff-only']"
+            capture "git" "-C" "{folder}" "rev-parse" "--short" "HEAD" id="head"
+            set "commit" "{head.output}"
+        }
+    }
+    step "list-branches" name="List branches" says="Get the list of branches" {
+        about "Gets the project's branches, on the server and on this computer, newest first. Put them into a Drop Down Button so people can pick one."
+        search-words "branches" "list of branches" "all branches" "get branches" "fill a list"
+        comes-next "git.switch-branch"
+        setting "folder" type="folder" starts="." label="Project folder" advanced=#true
+        result "branches" type="list" label="Branches"
+        needs {
+            app "git" help="Install Git from https://git-scm.com/downloads"
+        }
+        script #"""
+            local seen, list = {}, {}
+            local function add(out)
+                for name in out:gmatch("[^\r\n]+") do
+                    if name ~= "HEAD" and not seen[name] then
+                        seen[name] = true
+                        table.insert(list, name)
+                    end
+                end
+            end
+            add(capture("git", "-C", settings.folder, "for-each-ref", "--sort=-committerdate",
+                "--format=%(refname:lstrip=3)", "refs/remotes/origin"))
+            add(capture("git", "-C", settings.folder, "for-each-ref", "--sort=-committerdate",
+                "--format=%(refname:lstrip=2)", "refs/heads"))
+            return { branches = list }
+            """#
+    }
+    step "current-branch" name="Current branch" says="Find the current branch" quiet=#true {
+        about "Finds which branch the project is on, for later steps."
+        search-words "which branch"
+        setting "folder" type="folder" starts="." label="Project folder" advanced=#true
+        result "branch" label="Branch"
+        needs {
+            app "git" help="Install Git from https://git-scm.com/downloads"
+        }
+        does {
+            capture "git" "-C" "{folder}" "branch" "--show-current" id="now"
+            set "branch" "{now.output}"
+        }
+    }
+    step "commit" name="Commit" says="Commit: {message}" {
+        about "Saves your changes in the project's history, with a note saying what changed."
+        search-words "save changes" "check in"
+        comes-next "git.push"
+        setting "message" type="text" required=#true label="What changed"
+        setting "all" type="tick-box" starts=#true label="Include new files"
+        setting "folder" type="folder" starts="." label="Project folder" advanced=#true
+        needs {
+            app "git" help="Install Git from https://git-scm.com/downloads"
+        }
+        explain "nothing to commit" "There were no changes to commit."
+        does {
+            run "git" "-C" "{folder}" "add" "-A" if="settings.all"
+            run "git" "-C" "{folder}" "commit" "-a" "-m" "{message}"
+        }
+    }
+    step "push" name="Push" says="Send your changes to the server" {
+        about "Sends your committed changes to the server for everyone else."
+        search-words "upload" "share" "send"
+        setting "folder" type="folder" starts="." label="Project folder" advanced=#true
+        needs {
+            app "git" help="Install Git from https://git-scm.com/downloads"
+        }
+        explain "rejected" "The server has changes you don't have yet. Pull first, then push again."
+        does {
+            run "git" "-C" "{folder}" "push"
+        }
+    }
+}

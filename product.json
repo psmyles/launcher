@@ -1,0 +1,10 @@
+{
+  "productName": "Launcher",
+  "version": "0.2.0",
+  "author": "Chandan Singh",
+  "publisher": "Chandan Singh",
+  "description": "A GUI front end for scripted workflows",
+  "copyright": "Copyright (c) 2026 Chandan Singh",
+  "homepage": "",
+  "bundleId": "com.psmyles.launcher"
+}

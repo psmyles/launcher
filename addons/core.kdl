@@ -1,0 +1,85 @@
+// Core: running apps, values, waiting and stopping. Most of it is under Advanced.
+add-on "core" name="Core" version="1.0" requires="0.2" icon="gear" {
+    about "Run an app, remember a value, wait, or stop."
+    step "run" name="Run an app" says="Run {program}" built-in="run" advanced=#true {
+        about "Starts an app with the words you give it, and shows what it prints."
+        search-words "command" "program" "start" "execute" "launch"
+        setting "program" label="App" help="Its name (found the usual way) or where it is."
+        setting "arguments" label="What to pass it" help="One item per word or path."
+        setting "command-line" label="Everything to pass it, as one line" help="Windows only: for apps that need it all as one line."
+        setting "stdin" label="Text to type into it" help="Typed into the app as it starts."
+        setting "expect-exit" label="Answers that mean it worked" help="The numbers the app ends with when it works, like 0 or 0,1."
+        setting "io" label="How its text is shown" help="auto, terminal (colours and progress bars) or plain."
+        setting "fail-if-output" label="Stop if it prints" help="Words that mean it went wrong, even if the app carries on."
+    }
+    step "read-output" name="Run an app and keep what it prints" says="Run {program} and keep what it prints" built-in="capture" advanced=#true {
+        about "Runs an app quietly; later steps use what it printed."
+        search-words "capture" "output" "command"
+        setting "program" label="App"
+        setting "arguments" label="What to pass it" help="One item per word or path."
+        setting "expect-exit" label="Answers that mean it worked" help="The numbers the app ends with when it works, like 0."
+    }
+    step "check" name="Check an app says yes" says="Check {program}" built-in="check" check-step=#true advanced=#true {
+        about "Runs an app quietly before anything else; if it says no, the tool stops."
+        search-words "precondition" "verify" "test"
+        setting "program" label="App"
+        setting "arguments" label="What to pass it" help="One item per word or path."
+        setting "expect-exit" label="Answers that mean yes" help="The numbers the app ends with to say yes, like 0."
+    }
+    step "setup-script" name="Use a setup script" says="Use the setup script {script}" built-in="env-from" advanced=#true {
+        about "Runs a setup script (like vcvars64.bat) and keeps the settings it makes for later steps."
+        search-words "environment" "vcvars" "conda" "env"
+        setting "script" label="Setup script"
+        setting "arguments" label="What to pass it" help="One item per word or path."
+    }
+    step "remember" name="Remember a value" says="Remember {name}" built-in="set" quiet=#true advanced=#true {
+        about "Gives a value a name that later steps can use."
+        search-words "set" "variable" "value"
+        setting "name" label="Name"
+        setting "value" label="Value" help="Text, which can include other values in {braces}."
+    }
+    step "set-control" name="Change a control" says="Change {control}" built-in="set-control" quiet=#true advanced=#true {
+        about "Changes a control in the window."
+        setting "control" label="Control"
+        setting "value" label="New value"
+    }
+    step "reset-control" name="Reset a control" says="Reset {control}" built-in="reset" quiet=#true advanced=#true {
+        about "Puts a control back to how it starts."
+        setting "control" label="Control"
+    }
+    step "wait" name="Wait" says="Wait {ms} ms" built-in="wait" {
+        about "Waits a while before the next step."
+        search-words "pause" "sleep" "delay"
+        setting "ms" label="How long (ms)"
+    }
+    step "note" name="Write a note" says="Note: {text}" built-in="log" quiet=#true advanced=#true {
+        about "Writes a line in the step's details."
+        search-words "log" "print"
+        setting "text" label="Note"
+    }
+    step "stop-with-problem" name="Stop with a problem" says="Stop: {text}" built-in="fail" {
+        about "Stops the tool and shows why."
+        search-words "fail" "error" "abort"
+        setting "text" label="Problem to show"
+    }
+    step "stop" name="Stop here" says="Stop here" built-in="stop" {
+        about "Stops the tool quietly; nothing is wrong."
+        search-words "end" "finish" "exit"
+    }
+    step "script" name="Script" says="Run a script" built-in="lua" advanced=#true {
+        about "Luau code, for what the other steps can't do."
+        search-words "lua" "luau" "code"
+        setting "code" label="Script" help="Luau code, for what the other steps can't do."
+    }
+    step "command-line" name="Build a command line" says="Build the command line {name}" built-in="args" advanced=#true {
+        about "Puts a command line together from pieces, for apps that want one long line."
+        search-words "args" "arguments" "pairs"
+        setting "name" label="Name for it"
+    }
+    step "app-volume" name="Set an app's volume" says="Set the volume of {run}" built-in="set-process-volume" advanced=#true {
+        about "Sets the sound volume of an app started earlier."
+        search-words "sound" "audio" "mute"
+        setting "run" label="The step that started it"
+        setting "volume" label="Volume (0-100)"
+    }
+}

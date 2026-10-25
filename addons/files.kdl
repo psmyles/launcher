@@ -1,0 +1,65 @@
+// Files and folders: the engine's own file steps, in plain words.
+add-on "files" name="Files and folders" version="1.0" requires="0.2" icon="folder" {
+    about "Copy, move, delete, find, read and write files and folders."
+    step "copy" name="Copy" says="Copy {from} to {to}" built-in="copy" {
+        about "Copies a file, or a folder with everything in it."
+        search-words "duplicate" "backup" "export"
+        comes-next "files.show-in-folder"
+        setting "from" label="Copy what" help="The file or folder to copy."
+        setting "to" label="To" help="Where the copy goes. End it with / to copy into that folder."
+        setting "overwrite" label="Replace files that are already there" advanced=#true
+        setting "ask-first" label="Ask before replacing" starts=#true
+    }
+    step "move" name="Move or rename" says="Move {from} to {to}" built-in="move" {
+        about "Moves a file or folder, or gives it a new name."
+        search-words "rename"
+        setting "from" label="Move what"
+        setting "to" label="To"
+        setting "overwrite" label="Replace a file that is already there"
+    }
+    step "delete" name="Delete" says="Delete {path}" built-in="delete" {
+        about "Deletes a file, or a folder with everything in it."
+        search-words "remove" "clean" "erase"
+        setting "path" label="What to delete"
+        setting "missing" label="If it isn't there" help="\"ok\" carries on; \"error\" stops."
+        setting "to-trash" label="Move it to the Recycle Bin or Trash, so it can be got back" starts=#true
+    }
+    step "make-folder" name="Make a folder" says="Make the folder {path}" built-in="mkdir" {
+        about "Makes a folder, and any folders it sits in."
+        search-words "create" "new folder" "directory"
+        setting "path" label="Folder"
+    }
+    step "find-file" name="Find a file" says="Find {pattern}" built-in="find-file" {
+        about "Finds the first file whose name matches, and gives back where it is."
+        search-words "search" "look for"
+        setting "pattern" label="Name to look for" help="* stands for any letters, e.g. *.exe"
+        setting "in" label="Look in"
+        setting "recursive" label="Look in folders inside it too"
+    }
+    step "read" name="Read a file" says="Read {path}" built-in="read-file" advanced=#true {
+        about "Reads a text file, so later steps can use what it says."
+        setting "path" label="File"
+    }
+    step "write" name="Write to a text file" says="Write to {path}" built-in="write-file" {
+        about "Writes text, a number or a list (one item per line) into a text file. Several steps can write to the same file, each after the one before, so a tool makes one file. Each run starts it afresh."
+        search-words "save" "create file" "text file" "report" "list" "add to a file" "append" "log" "results" "summary"
+        setting "path" label="File" help="Where to write it. A name like results.txt puts it next to the tool."
+        setting "heading" label="Heading" help="A line above what it writes, like \"Models to fix\". Leave it empty for none."
+        setting "content" type="long-text" several=#true label="What to write" help="Text, or what an earlier step found. A list goes in one item per line."
+        setting "append" label="Add to what earlier steps wrote" starts=#true help="On: after what earlier steps of this run wrote to the file (the run's first write still starts it afresh). Off: replace the file."
+        setting "keep" label="Keep what earlier runs wrote" advanced=#true help="With Add on: the file grows run after run, instead of starting afresh each run."
+        setting "format" advanced=#true help="text writes it as it is; json-pretty and json-compact re-format JSON."
+        setting "newline" label="Line endings" advanced=#true help="keep, lf (macOS and Linux) or crlf (Windows)."
+        setting "create-dirs" label="Make the folders it goes in" advanced=#true
+    }
+    step "open" name="Open" says="Open {target}" built-in="open" {
+        about "Opens a file, folder or website, as a double-click would."
+        search-words "launch" "start" "website" "url"
+        setting "target" label="What to open" help="A file, a folder or a web address."
+    }
+    step "show-in-folder" name="Show in folder" says="Show {path} in its folder" built-in="reveal" {
+        about "Opens the folder and selects the file in Explorer or Finder."
+        search-words "reveal" "explorer" "finder" "locate"
+        setting "path" label="File or folder"
+    }
+}

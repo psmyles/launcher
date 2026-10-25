@@ -1,0 +1,2 @@
+syntax-backslash.launcher:2:9: error[syntax]: Expected quoted string
+    help: inside "..." a backslash starts an escape; write Windows paths as #"C:\path"# (a raw string) or double each backslash

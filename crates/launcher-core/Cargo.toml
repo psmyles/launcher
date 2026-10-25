@@ -1,0 +1,48 @@
+[package]
+name = "launcher-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Everything that does not need a window: config, Lua, lint, engine and the OS primitives it uses
+# (process spawning, pseudo-terminals, paths, state). No winit, egui or sokol here, so core cannot
+# name the UI and its tests compile no GPU code.
+
+[dependencies]
+kdl.workspace = true
+serde_json.workspace = true
+mlua.workspace = true
+notify.workspace = true
+ureq.workspace = true
+regex.workspace = true
+full_moon.workspace = true
+selene-lib.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",                    # SECURITY_ATTRIBUTES for pipes
+    "Win32_Storage_FileSystem",          # ReadFile / WriteFile
+    "Win32_System_Console",              # ConPTY (CreatePseudoConsole)
+    "Win32_System_IO",                   # gates IcmpSendEcho2 (LESSONS L2.5)
+    "Win32_System_JobObjects",           # kill-on-close job per process tree
+    "Win32_System_Pipes",
+    "Win32_System_Power",                # keep-awake during runs
+    "Win32_System_SystemInformation",    # GetLocalTime
+    "Win32_System_Threading",            # CreateProcessW, attribute lists
+    "Win32_NetworkManagement_IpHelper",  # ping (IcmpSendEcho2)
+    "Win32_Networking_WinSock",          # IPv6 addresses for ping
+    "Win32_Media_Audio",                 # per-process volume (WASAPI)
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage", # gates IMMDevice::Activate (L2.5)
+    "Win32_System_Variant",
+    "Win32_UI_Shell",                    # ShellExecuteW (open)
+    "Win32_UI_WindowsAndMessaging",      # SW_SHOWNORMAL
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[lints]
+workspace = true

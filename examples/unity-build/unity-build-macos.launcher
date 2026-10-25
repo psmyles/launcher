@@ -1,0 +1,96 @@
+// Build a Unity project without opening the editor: the Unity version the project was saved with
+// (ProjectSettings/ProjectVersion.txt) is found among the Unity Hub's editors, then run in batch
+// mode with the project's build method. Put this file in the project's folder (next to Assets),
+// or pick the folder in the form.
+//
+// The build method is a static C# method in an Editor folder of the project, for example
+// Assets/Editor/BuildScript.cs:
+//
+//     public static class BuildScript {
+//         public static void Build() {
+//             var target = EditorUserBuildSettings.activeBuildTarget;
+//             BuildPipeline.BuildPlayer(EditorBuildSettings.scenes,
+//                 $"Builds/{target}/Game.app", target, BuildOptions.None);
+//         }
+//     }
+//
+// It builds into Builds/<target> inside the project; the last step copies that folder out.
+launcher requires="0.1" os="macos"
+window title="Unity build"
+
+script #"""
+    -- The editor version the project was saved with.
+    function project_version(dir)
+        local file = path.join(dir, "ProjectSettings", "ProjectVersion.txt")
+        if not exists(file) then
+            return nil
+        end
+        return read_file(file):match("m_EditorVersion:%s*(%S+)")
+    end
+
+    -- Where the Unity Hub installs editors: its own folder unless the Hub was told another.
+    function hub_folders()
+        local folders = {}
+        local custom = path.join(env.HOME or "", "Library", "Application Support", "UnityHub",
+            "secondaryInstallPath.json")
+        if exists(custom) then
+            local ok, folder = pcall(json.decode, read_file(custom))
+            if ok and type(folder) == "string" and folder ~= "" then
+                table.insert(folders, folder)
+            end
+        end
+        table.insert(folders, "/Applications/Unity/Hub/Editor")
+        return folders
+    end
+
+    -- The Unity binary for the project, or "" when that version isn't installed.
+    function unity_editor(dir)
+        local version = project_version(dir)
+        if not version then
+            return ""
+        end
+        for _, folder in ipairs(hub_folders()) do
+            local exe = path.join(folder, version, "Unity.app", "Contents", "MacOS", "Unity")
+            if exists(exe) then
+                return exe
+            end
+        end
+        return ""
+    end
+
+    function describe(dir)
+        local version = project_version(dir)
+        if not version then
+            return "Not a Unity project (no ProjectSettings/ProjectVersion.txt)"
+        end
+        local exe = unity_editor(dir)
+        if exe == "" then
+            return "Unity " .. version .. " is not installed (install it with the Unity Hub)"
+        end
+        return "Unity " .. version
+    end
+    """#
+
+layout {
+    folder "project" label="Project" default="." must-exist=#true
+    display "unity" label="Editor" text=(lua)"describe(values.project)"
+    dropdown "target" label="Platform" {
+        option "macOS" value="StandaloneOSX"
+        option "iOS" value="iOS"
+        option "Android" value="Android"
+        option "WebGL" value="WebGL"
+    }
+    text "method" label="Build method" default="BuildScript.Build" required=#true pattern="[A-Za-z_][A-Za-z0-9_.]*" pattern-message="A static method: Namespace.Class.Method"
+    folder "output" label="Copy the build to" placeholder="Leave empty to keep it in the project" relative=#true
+    checkbox "show" label="Show the build when it's done" default=#true
+    button "build" label="Build" action="build" primary=#true enabled-if="unity_editor(values.project) ~= ''" disabled-tooltip="The project's Unity version isn't installed"
+}
+
+action "build" label="Build" {
+    set "editor" (lua)"unity_editor(values.project)"
+    fail "No Unity editor for this project was found" if="values.editor == ''"
+    run "{editor}" "-batchmode" "-quit" "-projectPath" "{project}" "-buildTarget" "{target}" "-executeMethod" "{method}" "-logFile" "-" label="Building for {target.name}"
+    copy "{project}/Builds/{target}" "{output}/{target}" overwrite=#true label="Copying the build out" if="values.output ~= ''"
+    reveal "{output}/{target}" if="values.show and values.output ~= ''"
+    reveal "{project}/Builds/{target}" if="values.show and values.output == ''"
+}

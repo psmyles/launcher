@@ -1,0 +1,14 @@
+tool "Copy files to a shared folder" format=2 requires="0.2"
+
+example name="Copy files to a shared folder" about="Copy a folder somewhere, like a shared drive, then show it."
+
+window {
+    folder "from" label="Copy" required=#true must-exist=#true
+    folder "to" label="To" required=#true
+    button "start" label="Copy"
+}
+
+steps "start" {
+    files.copy "copy" from="{from}" to="{to}/"
+    files.show-in-folder "show" path="{to}"
+}

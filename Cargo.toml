@@ -1,0 +1,74 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/launcher-core",
+    "crates/launcher",
+    "crates/sokol-gfx",
+    "tools/argdump",
+    "xtask",
+]
+# `vendor/sokol-rust` is a pinned upstream copy (floooh/sokol-rust @ b22a545), not our code; only
+# its C sources and generated bindings are used, through `crates/sokol-gfx`. `spike/` is the M0
+# renderer spike (docs/PLAN.md), its own workspace, deleted at the end of M1.
+exclude = ["vendor/sokol-rust", "spike"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[workspace.lints.rust]
+unused_must_use = "warn"
+
+[workspace.lints.clippy]
+todo = "warn"
+unimplemented = "warn"
+
+[workspace.dependencies]
+launcher-core = { path = "crates/launcher-core" }
+sokol-gfx = { path = "crates/sokol-gfx" }
+# The GUI (N8, N16). egui, egui-winit and winit move together; accesskit stays off.
+egui = { version = "=0.36.2", default-features = false, features = ["default_fonts"] }
+egui-winit = { version = "=0.36.2", default-features = false, features = ["clipboard", "links"] }
+winit = "=0.30.13"
+# Luau (N4, N6): sandboxed, and `send` so the VM can live on the evaluation and run threads.
+mlua = { version = "0.12", features = ["luau", "send"] }
+# The editor's Lua tools (N12): a lossless parser (highlighting, parse errors) and the linter.
+# `roblox` is Luau syntax.
+full_moon = { version = "2", default-features = false, features = ["luau"] }
+selene-lib = { version = "0.31", default-features = false, features = ["roblox"] }
+# The console (N7): the terminal model; the egui view is our own (forked from egui_term's idea).
+alacritty_terminal = "0.26"
+kdl = { version = "6", default-features = false, features = ["span"] }
+notify = "8"
+# http-get (HTTPS): rustls, no OpenSSL or schannel.
+ureq = "3"
+regex = { version = "1", default-features = false, features = ["std", "unicode-perl", "unicode-case"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+rfd = { version = "0.17", default-features = false }
+# The UI's few icons (assets/icon_*.png), decoded once when first drawn.
+png = "0.18"
+windows = "0.61"
+libc = "0.2"
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"
+objc2-core-foundation = "0.3"
+objc2-metal = "0.3"
+objc2-quartz-core = "0.3"
+raw-window-metal = "1.1"
+cc = "1"
+winresource = "0.1"
+
+[profile.release]
+# "z": measured on master (D25) as smaller at the same time to first frame; M0 kept it.
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = true
+# panic stays "unwind" (N15): the shell's firewall and the per-step catch_unwind depend on it.
+
+[profile.dev.package."*"]
+opt-level = 1

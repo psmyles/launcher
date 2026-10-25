@@ -1,0 +1,12 @@
+dropdown "loose" label="Not in a layout"
+layout {
+    option "Lost"
+    checkbox "flag" label="Flag" {
+        on-change {
+            run "git" "status"
+        }
+    }
+}
+action "a" {
+    checkbox "wrong" label="A control in an action"
+}

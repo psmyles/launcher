@@ -1,0 +1,2 @@
+syntax-bool.launcher:2:48: error[syntax]: Expected identifier string
+    help: write yes/no as #true / #false (and nothing as #null)

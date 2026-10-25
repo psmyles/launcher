@@ -1,0 +1,3 @@
+action "launch" {
+    run "C:\Games\Game.exe"
+}

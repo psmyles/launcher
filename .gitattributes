@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.ico binary
+*.png binary
+*.ttf binary
+# Byte-exact fixtures: keep them as the tools wrote them.
+tests/fixtures/json/*.json -text

@@ -1,0 +1,2 @@
+requires-newer.launcher:2:1: error[requires-newer]: this file needs Launcher 99.0 or newer, and this is Launcher 1.0
+    help: install the latest Launcher, then open the file again

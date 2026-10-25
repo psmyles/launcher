@@ -1,0 +1,115 @@
+// Launcher's look: changes to egui's stock dark and light styles, and Launcher's own `extras`.
+//
+// Every key, with its stock value, is in docs/theme-reference.kdl: copy a line here to change it.
+// Top-level keys apply to both themes; `dark { }` and `light { }` apply after them, to one.
+//
+// The release app uses the copy compiled in. Debug builds (`cargo xtask gallery`, or any
+// `cargo run`) read this file and reload it on save; so does any build with LAUNCHER_THEME=path.
+// A file with problems changes nothing: the problems show over the window.
+
+// Body and button text stay at egui's 13 px (Inter reads large); stock small text is 9 px, too
+// small to read (Launcher's is 12), and headings are 18.
+text_styles {
+    Small size=12
+    Heading size=20
+}
+
+spacing {
+    item_spacing 8 5
+    // Buttons and fields with some room around their text.
+    button_padding 8 3
+    interact_size y=22
+}
+
+visuals {
+    // One radius for every state: stock hovered is 3 and the rest 2, so a hovered button changes
+    // shape.
+    widgets {
+        noninteractive { corner_radius 4 }
+        inactive { corner_radius 4 }
+        hovered { corner_radius 4 }
+        active { corner_radius 4 }
+        open { corner_radius 4 }
+    }
+    menu_corner_radius 6
+}
+
+// Every piece of text reads at a contrast of at least 6:1 on whatever it sits on: the panel, a
+// field, a button in any state, a selected row (`ui::contrast`'s test checks the pairs). Stock
+// egui misses it: its muted text is 60% of an already grey label (2.7:1 in dark), its button text
+// is 5.3:1 and its error red 4.3:1. So muted text is its own colour, a cool grey that differs from
+// the plain text by hue as well as lightness; buttons are a step darker (light: lighter), with the
+// press and open fills no further from the panel than hover; and the warning, error, link and
+// success colours are lighter in dark and darker in light.
+//
+// Hover and press outlines (a selected button shows them too) just a step from the fill: stock
+// draws them light grey and white in dark, dark grey and black in light.
+dark {
+    visuals {
+        weak_text_color "#b3bccb"
+        widgets {
+            noninteractive { fg_stroke color="#dcdcdc" }
+            inactive {
+                bg_fill "#2e2e2e"
+                weak_bg_fill "#2e2e2e"
+                bg_stroke width=1.0 color="#3a3a3a"
+                fg_stroke color="#e6e6e6"
+            }
+            hovered {
+                bg_fill "#353535"
+                weak_bg_fill "#353535"
+                bg_stroke color="#5c5c5c"
+                fg_stroke color="#f5f5f5"
+            }
+            active {
+                bg_fill "#2a2a2a"
+                weak_bg_fill "#2a2a2a"
+                bg_stroke color="#727272"
+            }
+            open {
+                weak_bg_fill "#2a2a2a"
+                fg_stroke color="#e6e6e6"
+            }
+        }
+        selection { bg_fill "#0c3850" }
+        hyperlink_color "#6cb4ff"
+        warn_fg_color "#ffa040"
+        error_fg_color "#ff7b7b"
+    }
+}
+light {
+    visuals {
+        weak_text_color "#4a5161"
+        widgets {
+            noninteractive { fg_stroke color="#1f1f1f" }
+            inactive {
+                bg_fill "#ececec"
+                weak_bg_fill "#ececec"
+                fg_stroke color="#1f1f1f"
+            }
+            hovered {
+                bg_fill "#e2e2e2"
+                weak_bg_fill "#e2e2e2"
+                bg_stroke color="#b9b9b9"
+            }
+            active {
+                bg_fill "#e2e2e2"
+                weak_bg_fill "#e2e2e2"
+                bg_stroke color="#7d7d7d"
+            }
+            open {
+                bg_fill "#e2e2e2"
+                weak_bg_fill "#e2e2e2"
+                fg_stroke color="#1f1f1f"
+            }
+        }
+        selection {
+            bg_fill "#d4eaff"
+            stroke color="#003a63"
+        }
+        hyperlink_color "#0055aa"
+        warn_fg_color "#8f4400"
+        error_fg_color "#b00000"
+    }
+    extras { success "#0f642d" }
+}

@@ -1,0 +1,6 @@
+[toolchain]
+# Pinned (docs/PLAN.md, Step 1): egui 0.36 needs 1.88+, mlua 0.12 needs 1.88+.
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]
+# macOS targets for `cargo xtask check --macos` (type-checking the macOS code paths from Windows).
+targets = ["x86_64-pc-windows-msvc", "aarch64-apple-darwin"]

@@ -1,0 +1,65 @@
+[package]
+name = "launcher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The app: the winit loop, the sokol painter (N16), the egui UI, the console, the CLI.
+# Everything testable without a window lives in `launcher-core`.
+
+[dependencies]
+launcher-core.workspace = true
+sokol-gfx.workspace = true
+# `serde`: the theme file maps onto egui's Style (ui/theme.rs).
+egui = { workspace = true, features = ["serde"] }
+egui-winit.workspace = true
+winit.workspace = true
+alacritty_terminal.workspace = true
+rfd.workspace = true
+png.workspace = true
+# The editor: splices at KDL spans, and Luau tokens for highlighting (N12).
+kdl.workspace = true
+full_moon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",           # driver types, feature levels
+    "Win32_Graphics_Direct3D11",         # device, context, render-target view
+    "Win32_Graphics_Dxgi",               # factory, adapter, flip-model swapchain
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_System_Console",              # AttachConsole
+    "Win32_System_Threading",            # GetProcessTimes, TerminateProcess
+    "Win32_System_Com",                  # the taskbar list
+    "Win32_System_Com_StructuredStorage", # PROPVARIANT
+    "Win32_System_Variant",
+    "Win32_System_Ole",
+    "Win32_System_LibraryLoader",        # the exe's icon for notifications
+    "Win32_Storage_EnhancedStorage",     # PKEY_AppUserModel_*
+    "Win32_UI_Shell",                    # ITaskbarList3, Shell_NotifyIconW
+    "Win32_UI_Shell_PropertiesSystem",   # the window's property store
+    "Win32_UI_WindowsAndMessaging",      # FlashWindowEx, LoadIconW
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2.workspace = true
+objc2-foundation = { workspace = true, features = ["NSArray", "NSURL", "NSString"] }
+objc2-core-foundation.workspace = true
+objc2-metal.workspace = true
+objc2-quartz-core.workspace = true
+raw-window-metal.workspace = true
+
+[build-dependencies]
+serde_json.workspace = true
+
+[target.'cfg(windows)'.build-dependencies]
+winresource.workspace = true
+
+[lints]
+workspace = true

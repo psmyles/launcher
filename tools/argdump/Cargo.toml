@@ -1,0 +1,9 @@
+[package]
+name = "argdump"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Test stub: stands in for the game. Writes its raw command line (GetCommandLineW) and stdin to
+# files named by ARGDUMP_OUT, so tests can assert exactly what the launcher passed.

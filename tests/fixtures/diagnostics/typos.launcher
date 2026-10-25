@@ -1,0 +1,18 @@
+launcher requires="0.1"
+window titel="Build"
+
+layout {
+    dropdwn "branch" label="Branch"
+    checkbox "tests" lable="Run tests" persist="true"
+    radio "mode" label="Mode" horizontal=#true {
+        option "Debug"
+        option "Release"
+    }
+    button "go" label="Go" action="biuld"
+}
+
+action "build" {
+    run "dotnet" "build" "-c" "{mdoe}" on-error="ignore"
+    reset "test"
+    log "%USERPROFILE%\builds"
+}

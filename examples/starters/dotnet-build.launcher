@@ -1,0 +1,17 @@
+tool "Build the .NET solution" format=2 requires="0.2"
+
+example name="Build the .NET solution" about="Build Debug or Release, and run the tests if you like." suggest="dotnet"
+
+window {
+    choice "configuration" label="Build type" show-as="buttons" {
+        option "Debug"
+        option "Release"
+    }
+    tick-box "tests" label="Run the tests" starts=#true
+    button "start" label="Build"
+}
+
+steps "start" {
+    dotnet.build "build" configuration="{configuration}"
+    dotnet.test "test" configuration="{configuration}" if="values.tests"
+}

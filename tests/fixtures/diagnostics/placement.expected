@@ -1,0 +1,8 @@
+placement.launcher:1:1: error[misplaced]: `dropdown` can't go at the top of the file
+    help: `dropdown` belongs inside `layout` (or a container)
+placement.launcher:3:5: error[misplaced]: `option` can't go in `layout`
+    help: `option` belongs inside `dropdown`, `radio` or `checklist`
+placement.launcher:6:13: error[not-instant]: `run` can't run in on-change
+    help: on-change only runs instant steps: set, set-control, reset, log, lua
+placement.launcher:11:5: error[misplaced]: `checkbox` can't go in an `action`
+    help: `checkbox` belongs inside `layout` (or a container)

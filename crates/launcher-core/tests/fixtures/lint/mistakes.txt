@@ -1,0 +1,7 @@
+mistakes.launcher:4:15: warning[lua-lint]: unused is assigned a value, but never used (unused_variable)
+mistakes.launcher:11:55: warning[unknown-value]: values.brnach: no control, value or run variable is called `brnach` (did you mean `branch`?)
+mistakes.launcher:12:44: error[lua-lint]: standard library function `trim` requires 1 parameters, 0 passed (incorrect_standard_library_use)
+mistakes.launcher:17:15: warning[lua-lint]: x is assigned a value, but never used (unused_variable)
+mistakes.launcher:18:15: warning[lua-lint]: shadowing variable `x` (shadowing)
+mistakes.launcher:20:9: error[lua-lint]: `undefined_thing` is not defined (undefined_variable)
+mistakes.launcher:22:29: error[lua-syntax]: expected expression after binary operator

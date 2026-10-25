@@ -1,0 +1,15 @@
+// Internet: web addresses and other computers.
+add-on "internet" name="Internet" version="1.0" requires="0.2" icon="globe" {
+    about "Get a web address, or check that another computer answers."
+    step "get" name="Get a web address" says="Get {url}" built-in="http-get" {
+        about "Fetches a web address; later steps use what came back."
+        search-words "download" "http" "web" "api" "url"
+        setting "url" label="Web address"
+    }
+    step "check-computer" name="Check a computer answers" says="Check {host} answers" built-in="ping" {
+        about "Checks that another computer can be reached, e.g. a server on the VPN."
+        search-words "ping" "server" "network" "vpn"
+        setting "host" label="Computer" help="Its name or address, like 10.0.0.5."
+        setting "timeout" label="Wait up to (ms)"
+    }
+}

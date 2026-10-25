@@ -1,0 +1,5 @@
+// Written for a newer Launcher: the rest may use node kinds this one doesn't know.
+launcher requires="99.0"
+layout {
+    hologram "future"
+}

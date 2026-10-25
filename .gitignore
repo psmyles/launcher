@@ -1,0 +1,11 @@
+/target
+**/*.rs.bk
+*.pdb
+/shots/
+/out/
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+.claude/

@@ -1,0 +1,13 @@
+tool "Audit models" format=2 requires="0.2"
+
+example name="Audit models" about="Check every FBX model in a folder against an audit preset saved from 3D Review, and list the ones that need fixing." suggest="review3d"
+
+window {
+    file "rules" label="Audit preset" extensions="json" required=#true must-exist=#true
+    folder "models" label="Models" required=#true must-exist=#true
+    button "start" label="Audit"
+}
+
+steps "start" {
+    review3d.audit "audit" profile="{rules}" models="{models}" stop=#true
+}

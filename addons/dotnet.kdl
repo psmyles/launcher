@@ -1,0 +1,41 @@
+// .NET: build and test .NET solutions with the dotnet command.
+add-on "dotnet" name=".NET" version="1.0" requires="0.2" icon="dotnet" {
+    about "Build and test .NET projects."
+    suggest-if {
+        glob "*.sln"
+        glob "*.csproj"
+    }
+    step "build" name="Build" says="Build ({configuration})" {
+        about "Builds the project or solution."
+        search-words "compile" "make"
+        comes-next "dotnet.test"
+        setting "configuration" type="choice" starts="Debug" label="Build type" {
+            option "Debug"
+            option "Release"
+        }
+        setting "project" type="file" extensions="sln, slnx, csproj, fsproj, vbproj" label="Project or solution" help="Leave empty to use the one in the folder." advanced=#true
+        needs {
+            app "dotnet" help="Install the .NET SDK from https://dotnet.microsoft.com/download"
+        }
+        does {
+            run "dotnet" "build" "{project}" "-c" "{configuration}" if="settings.project ~= ''"
+            run "dotnet" "build" "-c" "{configuration}" if="settings.project == ''"
+        }
+    }
+    step "test" name="Test" says="Run the tests ({configuration})" {
+        about "Runs the project's tests."
+        search-words "unit tests" "check"
+        setting "configuration" type="choice" starts="Debug" label="Build type" {
+            option "Debug"
+            option "Release"
+        }
+        setting "build-first" type="tick-box" starts=#false label="Build before testing"
+        needs {
+            app "dotnet" help="Install the .NET SDK from https://dotnet.microsoft.com/download"
+        }
+        does {
+            run "dotnet" "test" "-c" "{configuration}" "--no-build" if="not settings['build-first']"
+            run "dotnet" "test" "-c" "{configuration}" if="settings['build-first']"
+        }
+    }
+}

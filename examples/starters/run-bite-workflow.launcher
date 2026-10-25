@@ -1,0 +1,15 @@
+tool "Run a Bite workflow" format=2 requires="0.2"
+
+example name="Run a Bite workflow" about="Run a workflow saved from Bite on every image in a folder, then show where the results went." suggest="bite"
+
+window {
+    file "workflow" label="Workflow" extensions="bite" required=#true must-exist=#true
+    folder "images" label="Images" required=#true must-exist=#true
+    folder "out" label="Save to" required=#true
+    button "start" label="Run"
+}
+
+steps "start" {
+    bite.run-workflow "run" workflow="{workflow}" images="{images}" save-to="{out}"
+    files.show-in-folder "show" path="{out}"
+}

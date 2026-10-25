@@ -1,0 +1,30 @@
+// Build a Swift package from any branch: pick the branch, update it, build debug or release and
+// maybe run the tests. Put this tool in the repository's root folder.
+tool "Build {branch}" format=2 requires="0.2" os="macos"
+
+window {
+    choice "branch" label="Branch" {
+        list-from "git.branches" folder="."
+    }
+    choice "mode" label="Build type" show-as="buttons" {
+        option "Debug" value="debug"
+        option "Release" value="release"
+    }
+    tick-box "tests" label="Run the tests" starts=#true
+    button "build" label="Build"
+}
+
+steps "build" {
+    before-starting {
+        git.no-unsaved-changes "clean"
+    }
+    git.fetch "fetch"
+    git.switch-branch "switch" branch="{branch}"
+    git.pull "pull"
+    core.run "compile" label="Building ({mode})" program="swift" {
+        arguments "build" "-c" "{mode}"
+    }
+    core.run "test" label="Testing" program="swift" if="values.tests" {
+        arguments "test" "-c" "{mode}"
+    }
+}

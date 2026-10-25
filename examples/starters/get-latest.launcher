@@ -1,0 +1,14 @@
+tool "Get the latest changes" format=2 requires="0.2"
+
+example name="Get the latest changes" about="Pull the latest changes into the project." suggest="git"
+
+window {
+    button "start" label="Get the latest"
+}
+
+steps "start" {
+    before-starting {
+        git.no-unsaved-changes "no-unsaved-changes"
+    }
+    git.pull "pull"
+}

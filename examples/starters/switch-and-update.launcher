@@ -1,0 +1,24 @@
+tool "Switch branch and get the latest" format=2 requires="0.2"
+
+example name="Switch branch and get the latest" about="Get the project's branches, pick one, switch to it and pull its latest changes." suggest="git"
+
+window {
+    button "get-branches" label="Get the list of branches"
+    choice "branch" label="Branch" required=#true
+    button "start" label="Switch and get the latest"
+}
+
+steps "get-branches" {
+    git.fetch "fetch"
+    git.list-branches "list" {
+        put "branches" into="branch"
+    }
+}
+
+steps "start" {
+    before-starting {
+        git.no-unsaved-changes "no-unsaved-changes"
+    }
+    git.switch-branch "switch" branch="{branch}"
+    git.pull "pull"
+}

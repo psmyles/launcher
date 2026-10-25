@@ -1,0 +1,11 @@
+[package]
+name = "sokol-gfx"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+# sokol_gfx + sokol_log only (not sokol_app/audio, which the vendored crate's build.rs compiles and
+# which links AudioToolbox on macOS). Bindings are the vendored generated files, included by path.
+
+[build-dependencies]
+cc = "1"

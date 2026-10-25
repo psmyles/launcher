@@ -1,0 +1,17 @@
+tool "Audit and optimize" format=2 requires="0.2"
+
+example name="Audit and optimize" about="Audit every FBX model in a folder with an audit preset, then run an Opt preset on just the models that need fixing." suggest="review3d"
+
+window {
+    file "rules" label="Audit preset" extensions="json" required=#true must-exist=#true
+    file "preset" label="Opt preset" extensions="json" required=#true must-exist=#true
+    folder "models" label="Models" required=#true must-exist=#true
+    folder "out" label="Save to" required=#true
+    button "start" label="Audit and optimize"
+}
+
+steps "start" {
+    review3d.audit "audit" profile="{rules}" models="{models}"
+    review3d.run-preset "optimize" preset="{preset}" models="{audit.to-fix}" save-to="{out}"
+    files.show-in-folder "show" path="{out}"
+}

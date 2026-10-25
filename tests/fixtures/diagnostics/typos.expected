@@ -1,0 +1,20 @@
+typos.launcher:2:8: error[unknown-property]: `window` has no property `titel`
+    help: did you mean `title`?
+typos.launcher:5:5: error[unknown-kind]: unknown node `dropdwn`
+    help: did you mean `dropdown`?
+typos.launcher:6:22: error[unknown-property]: `checkbox` has no property `lable`
+    help: did you mean `label`?
+typos.launcher:6:48: error[wrong-type]: `persist` should be #true or #false
+    help: write #true, without quotes
+typos.launcher:11:5: error[unknown-action]: button `go` runs `biuld`, but there is no such action
+    help: did you mean `build`?
+typos.launcher:15:5: warning[unknown-name]: `{mdoe}` doesn't name a control, value, data block or step result
+    help: did you mean `mode`?
+typos.launcher:15:49: error[wrong-type]: `on-error` can't be "ignore"
+    help: one of: abort, warn, continue
+typos.launcher:16:5: error[unknown-control]: there is no control `test`
+    help: did you mean `tests`?
+typos.launcher:17:9: warning[escaped-backslash]: this text contains a control character from a backslash escape (\r, \t...)
+    help: for a path write a raw string: #".\path\file"# (inside "..." a backslash starts an escape)
+typos.launcher:17:9: warning[percent-variable]: `%USERPROFILE%` is not expanded
+    help: write {env.USERPROFILE} for an environment variable

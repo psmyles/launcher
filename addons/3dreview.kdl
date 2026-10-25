@@ -1,0 +1,358 @@
+// 3D Review: optimize and check FBX models, and open them in the viewer.
+//
+// The work is done by review-cli, the console tool installed beside the viewer. Its
+// command line, exit codes and report are documented in 3D Review's docs/cli.md, and
+// it keeps the CLI contract (N32): exit 2 when it cannot follow the command line, 0
+// only when everything worked, 1 otherwise, and a --report file whose top-level
+// fields become this add-on's results.
+//
+// Each step finds 3D Review the same way, so each carries the same short helper:
+// PATH, then the install folder the Uninstall key names (Windows), then the app by
+// its bundle id (macOS). One Lua environment per add-on (N18) and core.find-app will
+// let it be written once.
+add-on "review3d" name="3D Review" version="1.0" requires="0.2" icon="cube" {
+    about "Optimize FBX models into LODs, check them against a game engine's rules, and open them in 3D Review."
+    suggest-if {
+        glob "*.fbx"
+        glob "*/*.fbx"
+    }
+    step "run-preset" name="Run an optimization preset" says="Run {preset} on the models in {models}" {
+        about "Runs a preset saved from 3D Review's Opt workspace on FBX models, just as it was saved: its operations, its LODs and how it saves them. The results are saved as FBX files."
+        search-words "preset" "apply preset" "opt" "operations" "stack" "batch" "lod" "lods" "optimize" "optimise" "fbx"
+        comes-next "review3d.audit" "files.show-in-folder"
+        setting "preset" type="file" extensions="json" required=#true label="Preset" help="A preset saved from 3D Review's Opt workspace (Save preset)."
+        setting "models" type="folder" several=#true required=#true label="Models" help="A folder of FBX models, one FBX file, or the models an earlier step found (an audit's Models to fix)."
+        setting "subfolders" type="tick-box" starts=#true label="Include the folders inside it"
+        setting "save-to" type="folder" required=#true label="Save to" help="The results go here. Models found in a folder keep their place below it; models given one by one go straight in."
+        setting "if-there" type="choice" starts="Replace them" label="If the files are already there" {
+            option "Replace them"
+            option "Skip that model"
+            option "Stop with a problem"
+        }
+        setting "replace-models" type="tick-box" starts=#false label="Let the results replace the models" help="When Save to is the models' own folder and nothing is added to the file names, each model is replaced by its result, so a game engine that already uses it picks up the new one. There's no undo: keep the models in source control."
+        setting "suffix" type="text" label="Add to each file name" help="For example _optimized." advanced=#true
+        setting "report" type="file" extensions="json" label="Save the full report to" help="A JSON file with every figure, for a script or a pipeline." advanced=#true
+        result "files" type="files" label="Files saved"
+        result "skipped-models" type="files" item="model" label="Models skipped"
+        result "optimized" type="number" label="How many were done"
+        result "skipped" type="number" label="How many were skipped"
+        explain "or replace it with --replace-models" "Save to is the folder the models are in, so the results would replace them. Choose another Save to folder, fill in Add to each file name, or tick Let the results replace the models."
+        explain "is one of the models being optimized" "One model's results would replace another of the models. Choose another Save to folder, or fill in Add to each file name."
+        explain "is already there" "The models were done before. Set If the files are already there to Replace them or Skip that model."
+        explain "Git LFS pointer" "Some models haven't been downloaded yet. Get them with Git LFS (git lfs pull), then try again."
+        script #"""
+            local function given(value) return value ~= nil and trim(tostring(value)) ~= "" end
+            -- Where 3D Review is installed: its folder on Windows, its .app on macOS.
+            local function install()
+                local places = {}
+                if os.name == "windows" then
+                    local key = "\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{B6F4B0E9-2E1B-4C3A-9D2F-3D5E7A1C0F42}_is1"
+                    for _, root in ipairs({ "HKCU", "HKLM" }) do
+                        local ok, out = pcall(capture, "reg", "query", root .. key, "/v", "InstallLocation")
+                        local folder = ok and out:match("InstallLocation%s+REG_SZ%s+([^\r\n]+)")
+                        if folder then table.insert(places, trim(folder)) end
+                    end
+                    if env.LOCALAPPDATA then table.insert(places, path.join(env.LOCALAPPDATA, "Programs", "3D Review")) end
+                    if env.ProgramFiles then table.insert(places, path.join(env.ProgramFiles, "3D Review")) end
+                else
+                    for _, id in ipairs({ "com.psmyles.3d-review", "com.psmyles.3d-review.dev" }) do
+                        local ok, out = pcall(capture, "mdfind", "kMDItemCFBundleIdentifier == '" .. id .. "'")
+                        for app in (ok and out or ""):gmatch("[^\r\n]+") do table.insert(places, app) end
+                    end
+                    table.insert(places, "/Applications/3D Review.app")
+                    if env.HOME then table.insert(places, path.join(env.HOME, "Applications", "3D Review.app")) end
+                end
+                for _, place in ipairs(places) do
+                    if exists(place) then return place end
+                end
+            end
+            local function cli()
+                local ok, found = pcall(capture, os.name == "windows" and "where" or "which", "review-cli")
+                if ok and given(found) then return trim(split(found, "\n")[1]) end
+                local place = install()
+                local tool = place and (os.name == "windows" and path.join(place, "review-cli.exe")
+                    or path.join(place, "Contents", "MacOS", "review-cli"))
+                if tool and exists(tool) then return tool end
+                fail("3D Review isn't installed on this computer, or it is too old to have review-cli. Install the latest 3D Review, then try again.")
+            end
+            -- Run review-cli and read its report: the report, and how it ended.
+            local function review(args, keep)
+                local tool = cli()
+                local report = given(keep) and path.absolute(keep) or path.join(env.TEMP or env.TMPDIR or config_dir,
+                    string.format("review-cli-%d-%d.json", os.time(), math.floor(os.clock() * 1000000)))
+                -- No --progress-bar on until Launcher reads OSC 9;4 (slice 5): before then it
+                -- would reach a headless run's own terminal, where some show it as noise.
+                for _, word in ipairs({ "--report", report }) do table.insert(args, word) end
+                table.insert(args, { check = false })
+                local code = run(tool, table.unpack(args)).exit_code
+                if code == 2 then fail("3D Review couldn't use these settings. The details say which one.") end
+                local ok, text = pcall(read_file, report)
+                if not given(keep) then delete(report) end
+                if not ok then fail("3D Review stopped before it finished. The details say why.") end
+                return json.decode(text), code
+            end
+
+            -- Only the preset says what to do: no --lods, --packaging or --hierarchy, which would
+            -- replace what it holds.
+            -- A folder or a file, or a list of them (what an audit found).
+            local models = type(settings.models) == "table" and settings.models or { settings.models }
+            local args = { "optimize" }
+            for _, model in ipairs(models) do
+                if given(model) then table.insert(args, path.absolute(tostring(model))) end
+            end
+            if #args == 1 then
+                log("No models to work on.")
+                return { files = {}, ["skipped-models"] = {}, optimized = 0, skipped = 0 }
+            end
+            local function add(option, value) table.insert(args, option); table.insert(args, value) end
+            add("--out", path.absolute(settings["save-to"]))
+            add("--preset", path.absolute(settings.preset))
+            if settings.subfolders then table.insert(args, "--recurse") end
+            if given(settings.suffix) then add("--suffix", settings.suffix) end
+            local if_there = { ["Replace them"] = "replace", ["Skip that model"] = "skip", ["Stop with a problem"] = "fail" }
+            add("--if-exists", if_there[settings["if-there"]] or "replace")
+            if settings["replace-models"] then table.insert(args, "--replace-models") end
+
+            local report, code = review(args, settings.report)
+            if code ~= 0 then
+                if report.problem then fail(report.problem) end
+                fail(string.format("%d of %d models didn't work. The details say why.", report.failed, report.models))
+            end
+            local skipped = {}
+            for _, entry in ipairs(report.results or {}) do
+                if entry.status == "skipped" then table.insert(skipped, entry.file) end
+            end
+            return {
+                files = report.outputs,
+                ["skipped-models"] = skipped,
+                optimized = report.done,
+                skipped = report.skipped,
+            }
+            """#
+    }
+    step "audit" name="Audit models" says="Audit the models in {models} with {profile}" {
+        about "Checks FBX models against an audit preset saved from 3D Review's Aud workspace, and gives back the models that need fixing, for a next step to work on (Run an optimization preset, say)."
+        search-words "audit" "check" "validate" "lint" "verify" "qa" "problems" "issues" "rules" "profile" "fbx"
+        comes-next "review3d.run-preset"
+        setting "profile" type="file" extensions="json" required=#true label="Audit preset" help="An audit profile saved from 3D Review's Aud workspace (Save profile)."
+        setting "models" type="folder" required=#true label="Models" help="A folder of FBX models. One FBX file works too."
+        setting "subfolders" type="tick-box" starts=#true label="Include the folders inside it"
+        setting "needs-fixing" type="choice" starts="Errors" label="A model needs fixing when it has" {
+            option "Errors"
+            option "Warnings or errors"
+            option "Anything to report"
+        }
+        setting "stop" type="tick-box" starts=#false label="Stop the tool when a model needs fixing" help="Leave it off to carry on, so a next step can fix the models."
+        setting "report" type="file" extensions="json" label="Save the full report to" help="A JSON file listing every finding, for a script or a pipeline." advanced=#true
+        result "to-fix" type="files" item="model" label="Models to fix"
+        result "passed" type="files" item="model" label="Models that passed"
+        result "to-fix-count" type="number" label="How many need fixing"
+        result "passed-count" type="number" label="How many passed"
+        result "checked" type="number" label="How many were checked"
+        result "errors" type="number" label="Errors found"
+        result "warnings" type="number" label="Warnings found"
+        explain "Git LFS pointer" "Some models haven't been downloaded yet. Get them with Git LFS (git lfs pull), then try again."
+        script #"""
+            local function given(value) return value ~= nil and trim(tostring(value)) ~= "" end
+            -- Where 3D Review is installed: its folder on Windows, its .app on macOS.
+            local function install()
+                local places = {}
+                if os.name == "windows" then
+                    local key = "\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{B6F4B0E9-2E1B-4C3A-9D2F-3D5E7A1C0F42}_is1"
+                    for _, root in ipairs({ "HKCU", "HKLM" }) do
+                        local ok, out = pcall(capture, "reg", "query", root .. key, "/v", "InstallLocation")
+                        local folder = ok and out:match("InstallLocation%s+REG_SZ%s+([^\r\n]+)")
+                        if folder then table.insert(places, trim(folder)) end
+                    end
+                    if env.LOCALAPPDATA then table.insert(places, path.join(env.LOCALAPPDATA, "Programs", "3D Review")) end
+                    if env.ProgramFiles then table.insert(places, path.join(env.ProgramFiles, "3D Review")) end
+                else
+                    for _, id in ipairs({ "com.psmyles.3d-review", "com.psmyles.3d-review.dev" }) do
+                        local ok, out = pcall(capture, "mdfind", "kMDItemCFBundleIdentifier == '" .. id .. "'")
+                        for app in (ok and out or ""):gmatch("[^\r\n]+") do table.insert(places, app) end
+                    end
+                    table.insert(places, "/Applications/3D Review.app")
+                    if env.HOME then table.insert(places, path.join(env.HOME, "Applications", "3D Review.app")) end
+                end
+                for _, place in ipairs(places) do
+                    if exists(place) then return place end
+                end
+            end
+            local function cli()
+                local ok, found = pcall(capture, os.name == "windows" and "where" or "which", "review-cli")
+                if ok and given(found) then return trim(split(found, "\n")[1]) end
+                local place = install()
+                local tool = place and (os.name == "windows" and path.join(place, "review-cli.exe")
+                    or path.join(place, "Contents", "MacOS", "review-cli"))
+                if tool and exists(tool) then return tool end
+                fail("3D Review isn't installed on this computer, or it is too old to have review-cli. Install the latest 3D Review, then try again.")
+            end
+            -- Run review-cli and read its report: the report, and how it ended.
+            local function review(args, keep)
+                local tool = cli()
+                local report = given(keep) and path.absolute(keep) or path.join(env.TEMP or env.TMPDIR or config_dir,
+                    string.format("review-cli-%d-%d.json", os.time(), math.floor(os.clock() * 1000000)))
+                -- No --progress-bar on until Launcher reads OSC 9;4 (slice 5): before then it
+                -- would reach a headless run's own terminal, where some show it as noise.
+                for _, word in ipairs({ "--report", report }) do table.insert(args, word) end
+                table.insert(args, { check = false })
+                local code = run(tool, table.unpack(args)).exit_code
+                if code == 2 then fail("3D Review couldn't use these settings. The details say which one.") end
+                local ok, text = pcall(read_file, report)
+                if not given(keep) then delete(report) end
+                if not ok then fail("3D Review stopped before it finished. The details say why.") end
+                return json.decode(text), code
+            end
+
+            local levels = { Errors = "error", ["Warnings or errors"] = "warning", ["Anything to report"] = "info" }
+            local args = { "audit", path.absolute(settings.models), "--profile", path.absolute(settings.profile),
+                "--fail-on", levels[settings["needs-fixing"]] or "error" }
+            if settings.subfolders then table.insert(args, "--recurse") end
+
+            -- Exit 1 also means "some models need fixing": the report says which, and why.
+            local report, code = review(args, settings.report)
+            if report.problem then fail(report.problem) end
+            if report.failed > 0 then
+                fail(string.format("3D Review couldn't check %d of %d models. The details say why.", report.failed, report.models))
+            end
+            local to_fix, passed = {}, {}
+            for _, entry in ipairs(report.results or {}) do
+                table.insert(entry.flagged and to_fix or passed, entry.file)
+            end
+            log(string.format("%d of %d models need fixing.", #to_fix, report.done))
+            if settings.stop and #to_fix > 0 then
+                fail(string.format("%d of %d models need fixing. The details list them.", #to_fix, report.models))
+            end
+            return {
+                ["to-fix"] = to_fix,
+                passed = passed,
+                ["to-fix-count"] = #to_fix,
+                ["passed-count"] = #passed,
+                checked = report.done,
+                errors = report.errors,
+                warnings = report.warnings,
+            }
+            """#
+    }
+    step "model-stats" name="Model stats" says="Count what is in {model}" {
+        about "Counts a model's polygons, triangles and vertices, as 3D Review's Model Stats shows them."
+        search-words "polycount" "triangle count" "info" "statistics" "budget" "fbx"
+        setting "model" type="file" extensions="fbx" required=#true label="Model" help="An FBX file."
+        result "polygons" type="number" label="Polygons"
+        result "triangles" type="number" label="Triangles"
+        result "vertices" type="number" label="Vertices"
+        result "gpu-vertices" type="number" label="GPU vertices"
+        explain "Git LFS pointer" "The model hasn't been downloaded yet. Get it with Git LFS (git lfs pull), then try again."
+        script #"""
+            local function given(value) return value ~= nil and trim(tostring(value)) ~= "" end
+            -- Where 3D Review is installed: its folder on Windows, its .app on macOS.
+            local function install()
+                local places = {}
+                if os.name == "windows" then
+                    local key = "\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{B6F4B0E9-2E1B-4C3A-9D2F-3D5E7A1C0F42}_is1"
+                    for _, root in ipairs({ "HKCU", "HKLM" }) do
+                        local ok, out = pcall(capture, "reg", "query", root .. key, "/v", "InstallLocation")
+                        local folder = ok and out:match("InstallLocation%s+REG_SZ%s+([^\r\n]+)")
+                        if folder then table.insert(places, trim(folder)) end
+                    end
+                    if env.LOCALAPPDATA then table.insert(places, path.join(env.LOCALAPPDATA, "Programs", "3D Review")) end
+                    if env.ProgramFiles then table.insert(places, path.join(env.ProgramFiles, "3D Review")) end
+                else
+                    for _, id in ipairs({ "com.psmyles.3d-review", "com.psmyles.3d-review.dev" }) do
+                        local ok, out = pcall(capture, "mdfind", "kMDItemCFBundleIdentifier == '" .. id .. "'")
+                        for app in (ok and out or ""):gmatch("[^\r\n]+") do table.insert(places, app) end
+                    end
+                    table.insert(places, "/Applications/3D Review.app")
+                    if env.HOME then table.insert(places, path.join(env.HOME, "Applications", "3D Review.app")) end
+                end
+                for _, place in ipairs(places) do
+                    if exists(place) then return place end
+                end
+            end
+            local function cli()
+                local ok, found = pcall(capture, os.name == "windows" and "where" or "which", "review-cli")
+                if ok and given(found) then return trim(split(found, "\n")[1]) end
+                local place = install()
+                local tool = place and (os.name == "windows" and path.join(place, "review-cli.exe")
+                    or path.join(place, "Contents", "MacOS", "review-cli"))
+                if tool and exists(tool) then return tool end
+                fail("3D Review isn't installed on this computer, or it is too old to have review-cli. Install the latest 3D Review, then try again.")
+            end
+            -- Run review-cli and read its report: the report, and how it ended.
+            local function review(args, keep)
+                local tool = cli()
+                local report = given(keep) and path.absolute(keep) or path.join(env.TEMP or env.TMPDIR or config_dir,
+                    string.format("review-cli-%d-%d.json", os.time(), math.floor(os.clock() * 1000000)))
+                -- No --progress-bar on until Launcher reads OSC 9;4 (slice 5): before then it
+                -- would reach a headless run's own terminal, where some show it as noise.
+                for _, word in ipairs({ "--report", report }) do table.insert(args, word) end
+                table.insert(args, { check = false })
+                local code = run(tool, table.unpack(args)).exit_code
+                if code == 2 then fail("3D Review couldn't use these settings. The details say which one.") end
+                local ok, text = pcall(read_file, report)
+                if not given(keep) then delete(report) end
+                if not ok then fail("3D Review stopped before it finished. The details say why.") end
+                return json.decode(text), code
+            end
+
+            local report, code = review({ "info", path.absolute(settings.model) })
+            if code ~= 0 then
+                local first = report.results and report.results[1]
+                fail(report.problem or (first and first.problem) or "3D Review couldn't read the model. The details say why.")
+            end
+            return {
+                polygons = report.polygons,
+                triangles = report.triangles,
+                vertices = report.vertices,
+                ["gpu-vertices"] = report.gpu_vertices,
+            }
+            """#
+    }
+    step "open" name="Open in 3D Review" says="Open {model} in 3D Review" {
+        about "Opens a model in 3D Review. The tool carries on without waiting for it to close."
+        search-words "view" "look at" "preview" "show model" "fbx" "start 3d review"
+        setting "model" type="file" extensions="fbx" label="Model" help="An FBX file. Leave it empty to just start 3D Review."
+        script #"""
+            local function given(value) return value ~= nil and trim(tostring(value)) ~= "" end
+            -- Where 3D Review is installed: its folder on Windows, its .app on macOS.
+            local function install()
+                local places = {}
+                if os.name == "windows" then
+                    local key = "\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{B6F4B0E9-2E1B-4C3A-9D2F-3D5E7A1C0F42}_is1"
+                    for _, root in ipairs({ "HKCU", "HKLM" }) do
+                        local ok, out = pcall(capture, "reg", "query", root .. key, "/v", "InstallLocation")
+                        local folder = ok and out:match("InstallLocation%s+REG_SZ%s+([^\r\n]+)")
+                        if folder then table.insert(places, trim(folder)) end
+                    end
+                    if env.LOCALAPPDATA then table.insert(places, path.join(env.LOCALAPPDATA, "Programs", "3D Review")) end
+                    if env.ProgramFiles then table.insert(places, path.join(env.ProgramFiles, "3D Review")) end
+                else
+                    for _, id in ipairs({ "com.psmyles.3d-review", "com.psmyles.3d-review.dev" }) do
+                        local ok, out = pcall(capture, "mdfind", "kMDItemCFBundleIdentifier == '" .. id .. "'")
+                        for app in (ok and out or ""):gmatch("[^\r\n]+") do table.insert(places, app) end
+                    end
+                    table.insert(places, "/Applications/3D Review.app")
+                    if env.HOME then table.insert(places, path.join(env.HOME, "Applications", "3D Review.app")) end
+                end
+                for _, place in ipairs(places) do
+                    if exists(place) then return place end
+                end
+            end
+
+            local place = install()
+            if not place then
+                fail("3D Review isn't installed on this computer. Install it, then try again.")
+            end
+            local model = given(settings.model) and path.absolute(settings.model) or nil
+            -- Both hand the viewer over and return at once, so the tool carries on.
+            if os.name == "windows" then
+                local viewer = path.join(place, "3d-review.exe")
+                if model then run("cmd", "/c", "start", "", viewer, model) else run("cmd", "/c", "start", "", viewer) end
+            else
+                -- -a, not plain open: that would hand the model to whatever opens .fbx files.
+                if model then run("open", "-a", place, model) else run("open", "-a", place) end
+            end
+            return {}
+            """#
+    }
+}

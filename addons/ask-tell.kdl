@@ -1,0 +1,25 @@
+// Ask or tell: talk to the person running the tool.
+add-on "ask-tell" name="Ask or tell" version="1.0" requires="0.2" icon="chat" {
+    about "Show a message, ask a yes-or-no question, or ask for a value while the tool runs."
+    step "message" name="Show a message" says="Show \"{text}\"" built-in="message" {
+        about "Shows a message and waits for OK."
+        search-words "tell" "notify" "alert" "popup"
+        setting "text" label="Message"
+        setting "level" label="Look" help="info, warning or error."
+    }
+    step "yes-or-no" name="Ask yes or no" says="Ask \"{text}\"" built-in="confirm" {
+        about "Asks a question. Yes carries on; No stops the tool quietly."
+        search-words "confirm" "question" "are you sure"
+        setting "text" label="Question"
+        setting "yes" label="Yes button"
+        setting "no" label="No button"
+    }
+    step "ask" name="Ask for a value" says="Ask \"{prompt}\"" built-in="ask" {
+        about "Asks the person to type something; later steps use it by its name."
+        search-words "input" "type" "prompt"
+        setting "name" label="Name for the answer"
+        setting "prompt" label="Question"
+        setting "default" label="Filled in already"
+        setting "password" label="Hide what is typed"
+    }
+}
