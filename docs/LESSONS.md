@@ -1,7 +1,6 @@
 # Lessons
 
-Things learned the hard way while building this, each with where it bit. Nothing here is folklore:
-most have a test or a comment at the place they apply.
+Things learned the hard way while building this, each with where it bit. Most have a test or a comment at the place they apply.
 
 ## KDL (kdl 6.7.1)
 
@@ -34,7 +33,7 @@ most have a test or a comment at the place they apply.
 - **L2.6** A WASAPI session enumerator is a snapshot: enumerate again on every poll.
 - **L2.7** `Command::arg` would quote `Key="value"` again; command lines from the config go through
   `raw_arg`.
-- **L2.8** Watch the config's *folder*, not the file: editors save by renaming a temp file over
+- **L2.8** Watch the config's _folder_, not the file: editors save by renaming a temp file over
   it. Set the debounce deadline on the first matching event and check it after every wake-up, or a
   stream of unrelated events in the same folder (the log file) can starve it.
 - **L2.9** A desktop-wide UI Automation search blocks on any hung window (a suspended Settings app
