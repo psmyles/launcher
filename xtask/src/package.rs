@@ -25,7 +25,7 @@ const NOTARY_PROFILE: &str = "fire";
 
 /// The licence files installed beside the binary: (source, relative to the workspace root; name
 /// installed). The binary links third-party code whose licences require them to travel with it.
-const NOTICES: [(&str, &str); 4] = [
+const NOTICES: [(&str, &str); 5] = [
     ("LICENSE", "LICENSE.txt"),
     ("THIRD-PARTY-NOTICES.md", "THIRD-PARTY-NOTICES.md"),
     (
@@ -35,6 +35,10 @@ const NOTICES: [(&str, &str); 4] = [
     (
         "crates/launcher/assets/fonts/JetBrainsMono-OFL.txt",
         "licenses/JetBrainsMono-OFL.txt",
+    ),
+    (
+        "licenses/subtle-BSD-3-Clause.txt",
+        "licenses/subtle-BSD-3-Clause.txt",
     ),
 ];
 
@@ -131,7 +135,7 @@ pub fn run_windows(args: &[String]) -> Result<(), String> {
             .arg(format!("/DOutputDir={}", out.display()))
             .arg(root.join("packaging/windows/launcher.iss")),
     )?;
-    let setup = out.join(format!("Launcher-{version}-setup.exe"));
+    let setup = out.join(format!("Launcher-{version}.exe"));
     let size = std::fs::metadata(&setup).map(|m| m.len()).unwrap_or(0);
     println!(
         "{} ({:.2} MB)",

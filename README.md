@@ -1,6 +1,6 @@
 # Launcher
 
-Launcher turns a script, or a procedure that lives in one person's head, into a form anyone on
+Launcher turns steps of repeated workflows into a GUI tool anyone on
 the team can run. A tool is one short `.launcher` text file: a window with a few fields and a
 button, and the steps the button runs. Double-click the file, fill in the form, press the button,
 and watch every step run in a live console. It runs on Windows and macOS.
@@ -9,7 +9,7 @@ and watch every step run in a live console. It runs on Windows and macOS.
 
 Get the latest version from [Releases](https://github.com/psmyles/launcher/releases/latest):
 
-- **Windows:** `Launcher-<version>-setup.exe`. It installs for your user only, with no admin
+- **Windows:** `Launcher-<version>.exe`. It installs for your user only, with no admin
   rights needed, and opens `.launcher` files when you double-click them.
 - **macOS (Apple silicon):** `Launcher-<version>.dmg`, signed and notarized.
 
@@ -53,7 +53,7 @@ to the work it's for, and everyone who pulls gets the new version.
   - [3D Review](https://github.com/psmyles/3d-review) and [Bite](https://github.com/psmyles/bite).
 - **Add-ons are text files too.** Each one is a `.kdl` file. Put one in the Add-ons folder (on
   the home screen, under More) and its steps show up in every tool, with no new build.
-- **A live console:** every program runs in a real terminal, so progress bars and colours show
+- **A live console:** every program runs in a real terminal, so progress bars and colors show
   up, and you can type into it when a program asks.
 - **A visual editor:** the Edit button in a tool's window opens it (so does right-click > Edit
   on Windows). It changes only the lines you touch, so comments and layout stay as you wrote
@@ -94,7 +94,7 @@ it, which needs Xcode 26 or later.
 **Windows** (needs [Inno Setup](https://jrsoftware.org/isdl.php) 6.5.2 or later):
 
 ```sh
-cargo xtask package-windows           # target/package/Launcher-<version>-setup.exe
+cargo xtask package-windows           # target/package/Launcher-<version>.exe
 ```
 
 A per-user install into `%LOCALAPPDATA%\Programs\Launcher`, no admin rights. Double-clicking a
@@ -118,16 +118,16 @@ that Mac). `--sign-id` and `--notary-profile` choose other credentials.
 
 ## Layout
 
-| Path | What |
-|---|---|
+| Path                   | What                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
 | `crates/launcher-core` | Everything without a window: config, Lua, engine, OS primitives (PTY, processes), state, logging |
-| `crates/launcher` | The app: winit loop, the sokol_gfx painter for egui, the UI, the console, the CLI |
-| `crates/sokol-gfx` | sokol_gfx + sokol_log from `vendor/sokol-rust` |
-| `addons` | The built-in add-ons, one `.kdl` file each |
-| `examples` | Starters and full example tools |
-| `tools/argdump` | A stand-in program for tests: records its exact command line, environment and stdin |
-| `xtask` | Automation (`cargo xtask ...`) |
-| `docs/` | Plan, decisions, references, renderer benchmark results |
+| `crates/launcher`      | The app: winit loop, the sokol_gfx painter for egui, the UI, the console, the CLI                |
+| `crates/sokol-gfx`     | sokol_gfx + sokol_log from `vendor/sokol-rust`                                                   |
+| `addons`               | The built-in add-ons, one `.kdl` file each                                                       |
+| `examples`             | Starters and full example tools                                                                  |
+| `tools/argdump`        | A stand-in program for tests: records its exact command line, environment and stdin              |
+| `xtask`                | Automation (`cargo xtask ...`)                                                                   |
+| `docs/`                | Plan, decisions, references, renderer benchmark results                                          |
 
 Lessons learned the hard way: [`LESSONS.md`](LESSONS.md).
 
