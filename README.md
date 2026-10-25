@@ -127,9 +127,9 @@ that Mac). `--sign-id` and `--notary-profile` choose other credentials.
 | `examples`             | Starters and full example tools                                                                  |
 | `tools/argdump`        | A stand-in program for tests: records its exact command line, environment and stdin              |
 | `xtask`                | Automation (`cargo xtask ...`)                                                                   |
-| `docs/`                | Plan, decisions, references, renderer benchmark results                                          |
+| `docs/`                | Docs and references                                                                              |
 
-Lessons learned the hard way: [`LESSONS.md`](LESSONS.md).
+Lessons learned the hard way: [`LESSONS.md`](/docs/LESSONS.md).
 
 ## Licence
 
