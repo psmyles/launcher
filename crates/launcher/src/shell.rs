@@ -34,6 +34,9 @@ use crate::gfx::{self, Gpu, PaintJob};
 /// Layout passes allowed before the first frame is drawn anyway.
 const MAX_SETTLE_PASSES: usize = 3;
 
+/// The smallest the user may make the window (logical px).
+const MIN_SIZE: LogicalSize<f64> = LogicalSize::new(320.0, 200.0);
+
 pub struct Shell {
     app: App,
     ctx: egui::Context,
@@ -118,7 +121,7 @@ impl Shell {
             .with_title(self.app.title())
             .with_visible(false)
             .with_resizable(true)
-            .with_min_inner_size(LogicalSize::new(320.0, 200.0))
+            .with_min_inner_size(MIN_SIZE)
             .with_window_icon(crate::os::window_icon());
         // Linux: the desktop finds the window's icon and name through its `.desktop` file.
         #[cfg(target_os = "linux")]
@@ -176,7 +179,7 @@ impl Shell {
         self.gpu = Some(gpu);
         self.app.begin(&self.ctx, self.proxy.clone());
         window.set_title(&self.app.title());
-        window.set_resizable(self.app.resizable());
+        set_resizable(&window, self.app.resizable());
         self.sync_os(&window);
         self.win = Some(Win {
             window: window.clone(),
@@ -323,7 +326,7 @@ impl Shell {
                 w.window.set_title(&title);
             }
             if w.window.is_resizable() != resizable {
-                w.window.set_resizable(resizable);
+                set_resizable(&w.window, resizable);
             }
             match request {
                 Some(WindowRequest::Close) => self.exit_requested = true,
@@ -534,6 +537,18 @@ impl ApplicationHandler<AppEvent> for Shell {
                 None => ControlFlow::Wait,
             });
         });
+    }
+}
+
+/// Let the user resize the window, or not. Wayland: winit 0.30 makes a window fixed by setting
+/// its stored min and max sizes to its current size, and making it resizable again only
+/// re-applies those, so it stays fixed (L6.6); give it its own limits back.
+fn set_resizable(window: &Window, resizable: bool) {
+    window.set_resizable(resizable);
+    #[cfg(target_os = "linux")]
+    if resizable {
+        window.set_min_inner_size(Some(MIN_SIZE));
+        window.set_max_inner_size(None::<LogicalSize<f64>>);
     }
 }
 

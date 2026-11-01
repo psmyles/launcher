@@ -164,3 +164,7 @@ Things learned the hard way while building this, each with where it bit. Most ha
   time it returns. Anything still holding objects on it crashes when dropped after that:
   egui-winit's clipboard (smithay-clipboard's worker thread segfaulted in `wl_proxy_destroy`), the
   EGL surface, EGL itself. The shell lets go of them in `exiting` instead (`shell.rs`).
+- **L6.6** On Wayland, winit 0.30's `set_resizable(false)` fixes the size by overwriting the
+  window's stored min and max sizes with its current size, and `set_resizable(true)` only
+  re-applies the stored ones: a window made fixed stays fixed. The shell sets its limits again
+  after making it resizable (`set_resizable` in `shell.rs`). X11 keeps them apart and is fine.
