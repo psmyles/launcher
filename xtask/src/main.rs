@@ -87,8 +87,9 @@ fn usage() {
   package-macos dev [--no-build] [--no-dmg]
                                 the same, unsigned and not notarized (as --no-sign); runs on
                                 this Mac
-  register [--no-build]         open .launcher files with this checkout's release build (Windows,
-                                this user only)
+  register [--no-build]         open .launcher files with this checkout's release build, for
+                                this user only. Linux: installs it to ~/.local/bin, with a
+                                .desktop entry, the .launcher file type and their icons
   unregister                    undo register"
     );
 }

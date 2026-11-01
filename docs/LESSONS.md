@@ -160,3 +160,7 @@ Things learned the hard way while building this, each with where it bit. Most ha
   lock just dropped still looks held; `engine/lock.rs` retries for 100 ms.
 - **L6.4** `openpty` takes `*const winsize` on Linux and `*mut winsize` on macOS; pass
   `&raw mut ws`, which fits both.
+- **L6.5** winit's `run_app` consumes the event loop, so its Wayland connection is closed by the
+  time it returns. Anything still holding objects on it crashes when dropped after that:
+  egui-winit's clipboard (smithay-clipboard's worker thread segfaulted in `wl_proxy_destroy`), the
+  EGL surface, EGL itself. The shell lets go of them in `exiting` instead (`shell.rs`).

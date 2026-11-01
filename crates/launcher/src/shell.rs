@@ -46,6 +46,8 @@ pub struct Shell {
     proxy: EventLoopProxy<AppEvent>,
     fatal: Option<String>,
     started: bool,
+    /// `shutdown` has run (it runs once, from `exiting` on Linux or after the loop).
+    shut_down: bool,
     /// The content asked to close the window (an action with `after="exit"`).
     exit_requested: bool,
     /// The window is in front (notifications only show when it isn't).
@@ -84,6 +86,7 @@ impl Shell {
             proxy,
             fatal: None,
             started: false,
+            shut_down: false,
             exit_requested: false,
             focused: true,
             identity: None,
@@ -97,6 +100,9 @@ impl Shell {
 
     /// After the loop returns: flush what must outlive the process.
     pub fn shutdown(&mut self) {
+        if std::mem::replace(&mut self.shut_down, true) {
+            return;
+        }
         self.sample_placement();
         self.app.on_exit();
         if let Some(w) = &self.win {
@@ -114,6 +120,13 @@ impl Shell {
             .with_resizable(true)
             .with_min_inner_size(LogicalSize::new(320.0, 200.0))
             .with_window_icon(crate::os::window_icon());
+        // Linux: the desktop finds the window's icon and name through its `.desktop` file.
+        #[cfg(target_os = "linux")]
+        {
+            use winit::platform::wayland::WindowAttributesExtWayland;
+            let id = crate::product::BUNDLE_ID;
+            attrs = attrs.with_name(id, id);
+        }
         attrs = match rect {
             Some(r) => attrs
                 .with_inner_size(PhysicalSize::new(r.width, r.height))
@@ -428,6 +441,18 @@ impl ApplicationHandler<AppEvent> for Shell {
             ));
             el.exit();
         }
+    }
+
+    /// Linux: the window, its EGL surface and egui-winit's clipboard thread all use the display
+    /// connection the event loop owns, which closes when `run_app` returns. Let go of them here,
+    /// while it's still open (L6.5): the surface before the window it draws into.
+    fn exiting(&mut self, _el: &ActiveEventLoop) {
+        #[cfg(target_os = "linux")]
+        firewall("exit", || {
+            self.shutdown();
+            self.gpu = None;
+            self.win = None;
+        });
     }
 
     fn user_event(&mut self, _el: &ActiveEventLoop, event: AppEvent) {

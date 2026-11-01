@@ -13,6 +13,7 @@ struct Product {
     publisher: String,
     description: String,
     copyright: String,
+    bundle_id: String,
 }
 
 fn main() {
@@ -44,6 +45,7 @@ fn read_product() -> Product {
         publisher: field("publisher"),
         description: field("description"),
         copyright: field("copyright"),
+        bundle_id: field("bundleId"),
     }
 }
 
@@ -96,4 +98,5 @@ fn export_env(p: &Product) {
     println!("cargo:rustc-env=LAUNCHER_PUBLISHER={}", p.publisher);
     println!("cargo:rustc-env=LAUNCHER_COPYRIGHT={}", p.copyright);
     println!("cargo:rustc-env=LAUNCHER_DESCRIPTION={}", p.description);
+    println!("cargo:rustc-env=LAUNCHER_BUNDLE_ID={}", p.bundle_id);
 }

@@ -88,6 +88,8 @@ extern "C" {
         attribs: *const EGLAttrib,
     ) -> EGLSurface;
     fn eglDestroySurface(dpy: EGLDisplay, surface: EGLSurface) -> EGLBoolean;
+    fn eglDestroyContext(dpy: EGLDisplay, ctx: EGLContext) -> EGLBoolean;
+    fn eglTerminate(dpy: EGLDisplay) -> EGLBoolean;
     fn eglMakeCurrent(
         dpy: EGLDisplay,
         draw: EGLSurface,
@@ -256,6 +258,18 @@ impl Device {
     }
 
     pub fn fill_environment(&self, _env: &mut sg::Environment) {}
+}
+
+impl Drop for Device {
+    /// Close EGL while the display connection is still open: the driver keeps a thread on it.
+    fn drop(&mut self) {
+        // SAFETY: our own context and display; nothing draws after the device is dropped.
+        unsafe {
+            eglMakeCurrent(self.display, null_mut(), null_mut(), null_mut());
+            eglDestroyContext(self.display, self.context);
+            eglTerminate(self.display);
+        }
+    }
 }
 
 /// An RGB8 window config, preferring one without alpha: on X11 it matches the window's 24-bit

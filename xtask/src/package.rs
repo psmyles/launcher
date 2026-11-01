@@ -43,7 +43,7 @@ const NOTICES: [(&str, &str); 5] = [
 ];
 
 /// A string field of product.json.
-fn product(key: &str) -> Result<String, String> {
+pub fn product(key: &str) -> Result<String, String> {
     let path = util::root().join("product.json");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let v: serde_json::Value =

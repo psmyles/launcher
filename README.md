@@ -4,7 +4,7 @@ Launcher turns steps of repeated workflows into a GUI tool anyone on
 the team can run. A tool is one short `.launcher` text file: a window with a few fields and a
 button, and the steps the button runs. Double-click the file, fill in the form, press the button,
 and watch every step run in a live console. It runs on Windows and macOS, and on Linux built from
-source (Wayland or X11; no installer or file association yet).
+source (Wayland or X11; no installer yet).
 
 ## Download
 
@@ -78,7 +78,9 @@ Requirements: Rust (the pinned toolchain in `rust-toolchain.toml` installs itsel
 Visual Studio 2022 Build Tools with "Desktop development with C++" (sokol and Luau are C/C++). On
 Linux, a C++ compiler and the EGL, OpenGL and Wayland headers (Ubuntu:
 `sudo apt install build-essential libegl-dev libgl-dev libwayland-dev`); it draws with OpenGL 4.1
-or later.
+or later. `cargo xtask register` installs the release build into `~/.local/bin` for your user,
+with a menu entry and the `.launcher` file type and icon, so double-clicking a tool opens it; run
+it again after a rebuild, and `cargo xtask unregister` takes it all out.
 
 ```sh
 cargo build --release -p launcher     # target/release/launcher(.exe)

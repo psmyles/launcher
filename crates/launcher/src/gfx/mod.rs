@@ -123,9 +123,10 @@ fn setup_sokol(device: &Device) -> Result<(), String> {
 
 /// The GPU: device, sokol, painter, and (once there is a window) its surface.
 pub struct Gpu {
+    /// First: fields drop in order, and the surface must go before its device.
+    surface: Option<Surface>,
     device: Device,
     painter: Painter,
-    surface: Option<Surface>,
     policy: Policy,
 }
 
