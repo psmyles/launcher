@@ -76,6 +76,8 @@ pub fn show_progress(window: &Window, p: Progress) {
         let _ = window;
         macos::show_progress(p);
     }
+    #[cfg(target_os = "linux")]
+    let _ = (window, p);
 }
 
 /// A run ended while the window was in the background.
@@ -87,6 +89,8 @@ pub fn notify(window: &Window, title: &str, body: &str, failed: bool) {
         let _ = (window, failed);
         macos::notify(title, body);
     }
+    #[cfg(target_os = "linux")]
+    let _ = (window, title, body, failed);
 }
 
 /// The window is in front again, or closing.

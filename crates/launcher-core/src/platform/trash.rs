@@ -1,5 +1,5 @@
-//! Moving a file or folder to the Recycle Bin (Windows) or the Trash (macOS), so a Delete step
-//! can be undone (N33). Ok(false) when the path isn't there.
+//! Moving a file or folder to the Recycle Bin (Windows) or the Trash (macOS, Linux), so a Delete
+//! step can be undone (N33). Ok(false) when the path isn't there.
 
 use std::path::Path;
 
@@ -38,7 +38,34 @@ pub fn trash(path: &Path) -> Result<bool, String> {
     Ok(true)
 }
 
-#[cfg(not(windows))]
+/// Linux: `gio trash` follows the freedesktop Trash spec (per-drive trash folders, restore info).
+#[cfg(target_os = "linux")]
+pub fn trash(path: &Path) -> Result<bool, String> {
+    if std::fs::symlink_metadata(path).is_err() {
+        return Ok(false);
+    }
+    let out = std::process::Command::new("gio")
+        .arg("trash")
+        .arg(path)
+        .output()
+        .map_err(|e| {
+            format!(
+                "couldn't run gio to move {} to the Trash: {e}",
+                path.display()
+            )
+        })?;
+    if out.status.success() {
+        Ok(true)
+    } else {
+        Err(format!(
+            "couldn't move {} to the Trash: {}",
+            path.display(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ))
+    }
+}
+
+#[cfg(target_os = "macos")]
 pub fn trash(path: &Path) -> Result<bool, String> {
     if std::fs::symlink_metadata(path).is_err() {
         return Ok(false);

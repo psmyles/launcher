@@ -1,5 +1,6 @@
 //! Compile sokol_gfx + sokol_log from the vendored sources: D3D11 on Windows (MSVC), Metal on
-//! macOS (as Objective-C, without ARC: callers wrap frames in an autorelease pool).
+//! macOS (as Objective-C, without ARC: callers wrap frames in an autorelease pool), OpenGL 4.1
+//! core on Linux (the context comes from EGL in the launcher crate).
 //!
 //! When cross-checking from another OS (`cargo check --target x86_64-pc-windows-msvc` on a Mac),
 //! the C step is skipped: there is no MSVC or Windows SDK to compile against, and `check` doesn't
@@ -57,6 +58,10 @@ fn main() {
             println!("cargo:rustc-link-lib=framework=Metal");
             println!("cargo:rustc-link-lib=framework=QuartzCore");
             println!("cargo:rustc-link-lib=framework=Foundation");
+        }
+        "linux" => {
+            build.define("SOKOL_GLCORE", None);
+            println!("cargo:rustc-link-lib=GL");
         }
         other => panic!("sokol-gfx: unsupported target OS {other}"),
     }

@@ -68,7 +68,36 @@ fn process_start_us() -> Option<u64> {
     }
 }
 
-#[cfg(not(any(windows, target_os = "macos")))]
+/// Linux: `/proc/self/stat` gives the start in clock ticks since boot (10 ms steps); the boot clock
+/// turns that into wall-clock time.
+#[cfg(target_os = "linux")]
+fn process_start_us() -> Option<u64> {
+    let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
+    // Fields after the command name, which is in parentheses and may hold spaces; starttime is
+    // field 22 overall, the 20th after the name.
+    let after = &stat[stat.rfind(')')? + 2..];
+    let ticks: u64 = after.split(' ').nth(19)?.parse().ok()?;
+    // SAFETY: plain sysconf query, and clock_gettime into a zeroed local.
+    let (hz, boot_us) = unsafe {
+        let hz = libc::sysconf(libc::_SC_CLK_TCK);
+        let mut ts: libc::timespec = std::mem::zeroed();
+        if hz <= 0 || libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut ts) != 0 {
+            return None;
+        }
+        (
+            hz as u64,
+            ts.tv_sec as u64 * 1_000_000 + ts.tv_nsec as u64 / 1000,
+        )
+    };
+    let now_us = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_micros() as u64;
+    let start_since_boot_us = ticks * 1_000_000 / hz;
+    Some(now_us - boot_us.saturating_sub(start_since_boot_us))
+}
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 fn process_start_us() -> Option<u64> {
     None
 }

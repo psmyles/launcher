@@ -43,11 +43,12 @@ pub fn run_check(args: &[String]) -> Result<(), String> {
         ));
     }
 
-    if cfg!(windows) && !flag(args, "--no-macos") {
+    // Each OS type-checks the others (Linux both).
+    if !cfg!(target_os = "macos") && !flag(args, "--no-macos") {
         step("macOS type-check (aarch64-apple-darwin)");
         macos_check()?;
     }
-    if cfg!(target_os = "macos") && !flag(args, "--no-windows") {
+    if !cfg!(windows) && !flag(args, "--no-windows") {
         step("Windows type-check (x86_64-pc-windows-msvc)");
         windows_check()?;
     }
@@ -83,7 +84,7 @@ fn macos_check() -> Result<(), String> {
         .env("RUSTFLAGS", "-D warnings"))
 }
 
-/// Type-check every crate for Windows, from macOS: the same stand-in tools, MSVC style.
+/// Type-check every crate for Windows, from macOS or Linux: the same stand-in tools, MSVC style.
 fn windows_check() -> Result<(), String> {
     let target = "x86_64-pc-windows-msvc";
     let tools = util::root().join("target").join("xtask-fake-tools");

@@ -143,6 +143,7 @@ pub fn check(files: &[PathBuf]) -> i32 {
             .and_then(|os| match os.as_str() {
                 "windows" => Some(Os::Windows),
                 "macos" => Some(Os::Macos),
+                "linux" => Some(Os::Linux),
                 _ => None,
             })
             .unwrap_or(Os::current());

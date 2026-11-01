@@ -1,6 +1,7 @@
-//! egui → sokol_gfx painter, the same on D3D11 and Metal (N16; measured in M0 as variant B).
+//! egui → sokol_gfx painter, the same on D3D11, Metal and OpenGL (N16; measured in M0 as variant B).
 //!
-//! * Shader: sokol_imgui's precompiled blobs (hlsl4 / metal_macos). They fit egui: position and
+//! * Shader: sokol_imgui's precompiled blobs (hlsl4 / metal_macos), and the same shader as GLSL
+//!   4.10 source on Linux. They fit egui: position and
 //!   display size in points, fragment = texture × vertex colour. The uniform is
 //!   `{ disp_size, gamma, pad }`; gamma must be 1.0 (the shader raises the colour to that power).
 //! * Pipeline: egui's `Vertex` layout (pos f32×2, uv f32×2, colour u8×4, stride 20), 32-bit
@@ -29,11 +30,38 @@ mod blobs {
     pub const FS: &[u8] = include_bytes!("shaders/fs_bytecode_metal_macos.bin");
     pub const ENTRY: Option<&std::ffi::CStr> = Some(c"main0");
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
 mod blobs {
     pub const VS: &[u8] = include_bytes!("shaders/vs_bytecode_hlsl4.bin");
     pub const FS: &[u8] = include_bytes!("shaders/fs_bytecode_hlsl4.bin");
     pub const ENTRY: Option<&std::ffi::CStr> = None;
+}
+
+/// GL takes source, not bytecode: sokol_imgui's shader, written out.
+#[cfg(target_os = "linux")]
+mod glsl {
+    pub const VS: &std::ffi::CStr = c"#version 410
+uniform vec4 vs_params[1];
+in vec2 position;
+in vec2 texcoord0;
+in vec4 color0;
+out vec2 uv;
+out vec4 color;
+void main() {
+    gl_Position = vec4(((position / vs_params[0].xy) - vec2(0.5)) * vec2(2.0, -2.0), 0.5, 1.0);
+    uv = texcoord0;
+    color = vec4(pow(color0.rgb, vec3(vs_params[0].z)), color0.a);
+}
+";
+    pub const FS: &std::ffi::CStr = c"#version 410
+uniform sampler2D tex_smp;
+in vec2 uv;
+in vec4 color;
+out vec4 frag_color;
+void main() {
+    frag_color = texture(tex_smp, uv) * color;
+}
+";
 }
 
 #[repr(C)]
@@ -95,11 +123,19 @@ fn make_buffer(size: usize, index: bool) -> sg::Buffer {
 
 fn make_pipeline(color_format: sg::PixelFormat) -> sg::Pipeline {
     let mut shd = sg::ShaderDesc::new();
-    shd.vertex_func.bytecode = range(blobs::VS);
-    shd.fragment_func.bytecode = range(blobs::FS);
-    if let Some(entry) = blobs::ENTRY {
-        shd.vertex_func.entry = entry.as_ptr();
-        shd.fragment_func.entry = entry.as_ptr();
+    #[cfg(not(target_os = "linux"))]
+    {
+        shd.vertex_func.bytecode = range(blobs::VS);
+        shd.fragment_func.bytecode = range(blobs::FS);
+        if let Some(entry) = blobs::ENTRY {
+            shd.vertex_func.entry = entry.as_ptr();
+            shd.fragment_func.entry = entry.as_ptr();
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        shd.vertex_func.source = glsl::VS.as_ptr();
+        shd.fragment_func.source = glsl::FS.as_ptr();
     }
     for (i, name) in [c"position", c"texcoord0", c"color0"]
         .into_iter()

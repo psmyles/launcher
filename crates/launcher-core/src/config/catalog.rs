@@ -55,6 +55,7 @@ pub enum Os {
     Any,
     Windows,
     Macos,
+    Linux,
 }
 
 impl Os {
@@ -63,6 +64,17 @@ impl Os {
             Os::Any => "any",
             Os::Windows => "windows",
             Os::Macos => "macos",
+            Os::Linux => "linux",
+        }
+    }
+
+    /// The OS a file's `os=` names.
+    pub fn from_word(word: &str) -> Option<Os> {
+        match word {
+            "windows" => Some(Os::Windows),
+            "macos" => Some(Os::Macos),
+            "linux" => Some(Os::Linux),
+            _ => None,
         }
     }
 
@@ -70,8 +82,10 @@ impl Os {
     pub fn current() -> Os {
         if cfg!(windows) {
             Os::Windows
-        } else {
+        } else if cfg!(target_os = "macos") {
             Os::Macos
+        } else {
+            Os::Linux
         }
     }
 
@@ -236,7 +250,7 @@ pub const DEDUPE: &[&str] = &["first", "last", "none"];
 pub const THEMES: &[&str] = &["system", "dark", "light"];
 pub const POSITIONS: &[&str] = &["remember", "center"];
 pub const NOTE_STYLES: &[&str] = &["normal", "muted", "warning", "error"];
-pub const OSES: &[&str] = &["windows", "macos"];
+pub const OSES: &[&str] = &["windows", "macos", "linux"];
 pub const IO: &[&str] = &["auto", "pty", "pipe"];
 pub const MISSING: &[&str] = &["ok", "error"];
 
@@ -335,7 +349,7 @@ pub const SPECS: &[Spec] = &[
             p(
                 "os",
                 Ty::Enum(OSES),
-                "The one OS this file is for. Leave it out for a file that works on both.",
+                "The one OS this file is for. Leave it out for a file that works on all of them.",
             ),
             pd(
                 "save-logs",

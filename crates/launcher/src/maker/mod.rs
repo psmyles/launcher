@@ -399,11 +399,7 @@ impl Maker {
             )),
             Need::Os(os) if *os != Os::current() => Some(format!(
                 "This step only works on {}.",
-                if *os == Os::Windows {
-                    "Windows"
-                } else {
-                    "macOS"
-                }
+                launcher_core::config::header::os_title(*os)
             )),
             _ => None,
         })
@@ -1494,13 +1490,13 @@ impl Maker {
             .map(str::to_string);
         let blocked = |d: &StepDef| {
             let tool_os = tool_os.as_deref()?;
+            let tool_title = Os::from_word(tool_os)
+                .map_or("another OS", launcher_core::config::header::os_title);
             d.needs.iter().find_map(|n| match n {
-                Need::Os(Os::Windows) if tool_os != "windows" => {
-                    Some("This step only works on Windows, and this tool is for macOS.".into())
-                }
-                Need::Os(Os::Macos) if tool_os != "macos" => {
-                    Some("This step only works on macOS, and this tool is for Windows.".into())
-                }
+                Need::Os(os) if *os != Os::Any && tool_os != os.name() => Some(format!(
+                    "This step only works on {}, and this tool is for {tool_title}.",
+                    launcher_core::config::header::os_title(*os)
+                )),
                 _ => None,
             })
         };

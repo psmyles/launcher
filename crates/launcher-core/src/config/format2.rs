@@ -1032,22 +1032,18 @@ impl Tx<'_> {
         if let Some(tool_os) = self.tool_os.clone() {
             for need in &def.needs {
                 if let crate::addons::Need::Os(os) = need {
-                    let (word, name) = match os {
-                        crate::config::catalog::Os::Windows => ("windows", "Windows"),
-                        crate::config::catalog::Os::Macos => ("macos", "macOS"),
-                        crate::config::catalog::Os::Any => continue,
-                    };
+                    if *os == crate::config::catalog::Os::Any {
+                        continue;
+                    }
+                    let (word, name) = (os.name(), crate::config::header::os_title(*os));
                     if tool_os != word {
                         self.error(
                             "wrong-os",
                             format!(
                                 "\"{}\" only works on {name}, and this tool is for {}",
                                 def.name,
-                                if tool_os == "windows" {
-                                    "Windows"
-                                } else {
-                                    "macOS"
-                                }
+                                crate::config::catalog::Os::from_word(&tool_os)
+                                    .map_or("another OS", crate::config::header::os_title)
                             ),
                             Some("take the step out, or choose another".into()),
                             Self::node_span(n),

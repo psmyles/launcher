@@ -144,3 +144,19 @@ Things learned the hard way while building this, each with where it bit. Most ha
   posted notification succeeds and shows nothing. Check that before debugging a missing toast.
 - **L4.6** The agent's shell sets `NO_COLOR=1`, and everything started from it inherits it:
   clear it before judging whether a program prints colour in the console.
+
+## Linux
+
+- **L6.1** A GL context first made current with no surface (EGL_KHR_surfaceless_context) gets
+  `GL_NONE` as its draw buffer, and keeps it when a window surface is bound later: everything
+  draws nowhere and the window stays black. Set `glDrawBuffer(GL_BACK)` once the window is bound
+  (`gfx/gl.rs`).
+- **L6.2** winit's `pre_present_notify` can't pace an EGL window on Wayland: EGL commits the frame
+  before winit's frame request goes out, the request lands on a commit that never comes, and
+  winit holds every later redraw for its callback. The window shows the first frame only.
+  `gfx/gl.rs` caps presents at the monitor's refresh rate instead.
+- **L6.3** Unix file locks belong to the open file, and a child between fork and exec holds a
+  copy of every open file. `pre_exec` makes std fork, so while another thread starts a program a
+  lock just dropped still looks held; `engine/lock.rs` retries for 100 ms.
+- **L6.4** `openpty` takes `*const winsize` on Linux and `*mut winsize` on macOS; pass
+  `&raw mut ws`, which fits both.

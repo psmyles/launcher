@@ -29,6 +29,7 @@ fn the_examples_have_no_problems() {
         let os = match header::sniff(&text).and_then(|h| h.os).as_deref() {
             Some("macos") => Os::Macos,
             Some("windows") => Os::Windows,
+            Some("linux") => Os::Linux,
             _ => Os::current(),
         };
         let loaded = config::load_str(

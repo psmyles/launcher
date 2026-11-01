@@ -1,5 +1,5 @@
 //! Opening things the way the OS does: `open` (a file, folder or URL with its default program)
-//! and `reveal` (select a file in Explorer or Finder).
+//! and `reveal` (select a file in Explorer, Finder, or the Linux desktop's file manager).
 
 #[cfg(windows)]
 pub fn open(target: &str) -> Result<(), String> {
@@ -47,6 +47,64 @@ pub fn reveal(path: &std::path::Path) -> Result<(), String> {
 #[cfg(target_os = "macos")]
 pub fn reveal(path: &std::path::Path) -> Result<(), String> {
     run_open(&["-R", &path.display().to_string()])
+}
+
+#[cfg(target_os = "linux")]
+pub fn open(target: &str) -> Result<(), String> {
+    let s = std::process::Command::new("xdg-open")
+        .arg(target)
+        .status()
+        .map_err(|e| format!("could not run xdg-open: {e}"))?;
+    if s.success() {
+        Ok(())
+    } else {
+        Err(format!("xdg-open {target} failed"))
+    }
+}
+
+/// Linux: the file manager's ShowItems over D-Bus selects the item; without one, open the folder.
+#[cfg(target_os = "linux")]
+pub fn reveal(path: &std::path::Path) -> Result<(), String> {
+    let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    let shown = std::process::Command::new("dbus-send")
+        .args([
+            "--session",
+            "--print-reply",
+            "--dest=org.freedesktop.FileManager1",
+            "--type=method_call",
+            "/org/freedesktop/FileManager1",
+            "org.freedesktop.FileManager1.ShowItems",
+        ])
+        .arg(format!("array:string:{}", file_uri(&path)))
+        .arg("string:")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+    if shown {
+        return Ok(());
+    }
+    let folder = if path.is_dir() {
+        path.as_path()
+    } else {
+        path.parent().unwrap_or(&path)
+    };
+    open(&folder.display().to_string())
+}
+
+/// `file://` and the path, percent-encoded outside the characters a URI path allows as is.
+#[cfg(target_os = "linux")]
+fn file_uri(path: &std::path::Path) -> String {
+    use std::os::unix::ffi::OsStrExt;
+    let mut uri = String::from("file://");
+    for &b in path.as_os_str().as_bytes() {
+        if b.is_ascii_alphanumeric() || b"/-._~".contains(&b) {
+            uri.push(b as char);
+        } else {
+            uri.push_str(&format!("%{b:02X}"));
+        }
+    }
+    uri
 }
 
 #[cfg(target_os = "macos")]

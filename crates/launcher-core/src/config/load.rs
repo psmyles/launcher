@@ -941,6 +941,7 @@ impl<'a> Ld<'a> {
                         os: Self::p_string(&nv, "os").and_then(|s| match s.as_str() {
                             "windows" => Some(Os::Windows),
                             "macos" => Some(Os::Macos),
+                            "linux" => Some(Os::Linux),
                             _ => None,
                         }),
                         save_logs: Self::p_bool(&nv, "save-logs", false),

@@ -689,9 +689,10 @@ fn step<'a>(
                         "os" => match args(d).first().and_then(|e| string(e)).as_deref() {
                             Some("windows") => def.needs.push(Need::Os(Os::Windows)),
                             Some("macos") => def.needs.push(Need::Os(Os::Macos)),
+                            Some("linux") => def.needs.push(Need::Os(Os::Linux)),
                             _ => r.error(
                                 "bad-os",
-                                "`os` is \"windows\" or \"macos\"".into(),
+                                "`os` is \"windows\", \"macos\" or \"linux\"".into(),
                                 None,
                                 Reader::node_span(d),
                             ),

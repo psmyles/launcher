@@ -5,7 +5,7 @@
 //! window is shown, a background thread opens the hardware device and the shell switches to it
 //! ([`Gpu::switch_device`]): WARP costs ~1.4 cores while the console streams, the GPU ~2.5% of
 //! one. With no real GPU (the Basic Render Driver) it stays on WARP. `LAUNCHER_GPU=warp|hardware`
-//! pins one device. macOS uses the system GPU throughout.
+//! pins one device. macOS and Linux use the system GPU throughout.
 //!
 //! sokol_gfx is a process-wide singleton with no thread affinity: set up on the bring-up thread,
 //! used from the main thread after the join.
@@ -17,6 +17,9 @@ pub mod painter;
 mod platform;
 #[cfg(target_os = "macos")]
 #[path = "metal.rs"]
+mod platform;
+#[cfg(target_os = "linux")]
+#[path = "gl.rs"]
 mod platform;
 
 pub use platform::Device;
@@ -55,7 +58,7 @@ fn first_device(policy: Policy) -> Result<Device, String> {
             }
         }
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(not(windows))]
     {
         let _ = policy;
         Device::create_default()
@@ -79,10 +82,26 @@ pub fn upgrade_device() -> Option<Device> {
             }
         }
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(not(windows))]
     {
         None
     }
+}
+
+/// The event loop is built: on Linux the GPU thread opens EGL on its display (see `gl.rs`).
+pub fn display_ready(event_loop: &winit::event_loop::EventLoop<crate::app::AppEvent>) {
+    #[cfg(target_os = "linux")]
+    {
+        use winit::raw_window_handle::HasDisplayHandle;
+        platform::display_ready(
+            event_loop
+                .display_handle()
+                .map(|h| h.as_raw())
+                .map_err(|e| format!("no display handle: {e}")),
+        );
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = event_loop;
 }
 
 fn setup_sokol(device: &Device) -> Result<(), String> {
@@ -140,6 +159,9 @@ impl Gpu {
             setup_sokol(&device)?;
             let painter = Painter::new(COLOR_FORMAT);
             crate::timing::report("sokol + painter");
+            // GL: the main thread makes the context current with the window's surface.
+            #[cfg(target_os = "linux")]
+            device.release_current();
             Ok(Gpu {
                 device,
                 painter,

@@ -11,7 +11,7 @@ A `.launcher` file is KDL v2. Values are plain text, templates with `{name}`, `{
 The header, first in the file. The launcher reads it before anything else.
 
 - `requires` (version): The oldest Launcher version this file works with (e.g. "1.2").
-- `os` (word: windows | macos): The one OS this file is for. Leave it out for a file that works on both.
+- `os` (word: windows | macos | linux): The one OS this file is for. Leave it out for a file that works on all of them.
 - `save-logs` (#true|#false, default `#false`): Save what each run printed to files on this computer ("Log files" opens them). Without it, a run's output only shows in the window.
 
 ### `window`

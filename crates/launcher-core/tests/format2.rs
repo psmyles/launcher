@@ -671,8 +671,13 @@ steps "start" {
 
 #[test]
 fn what_would_go_wrong_is_found_before_a_run() {
+    // On macOS, where the tool for macOS below opens.
+    let opts = LoadOptions {
+        os: Os::Macos,
+        ..LoadOptions::default()
+    };
     let check = |src: &str| {
-        let l = load_str(src, Path::new("t.launcher"), &LoadOptions::default());
+        let l = load_str(src, Path::new("t.launcher"), &opts);
         problems(&l)
     };
     let has = |p: &[String], want: &str| {

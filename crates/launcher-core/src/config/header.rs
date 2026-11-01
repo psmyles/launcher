@@ -58,6 +58,7 @@ pub fn os_title(os: Os) -> &'static str {
     match os {
         Os::Windows => "Windows",
         Os::Macos => "macOS",
+        Os::Linux => "Linux",
         Os::Any => "any OS",
     }
 }
@@ -123,6 +124,7 @@ pub fn gate(sniffed: &Sniffed, running: Version, os: Os) -> Option<Gate> {
     let file_os = match sniffed.os.as_deref() {
         Some("windows") => Os::Windows,
         Some("macos") => Os::Macos,
+        Some("linux") => Os::Linux,
         _ => return None,
     };
     (os != Os::Any && file_os != os).then_some(Gate::WrongOs {

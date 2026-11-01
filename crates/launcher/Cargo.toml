@@ -47,6 +47,10 @@ windows = { workspace = true, features = [
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
 
+# Linux: file dialogs through the desktop portal (no GTK), drawing through EGL + OpenGL.
+[target.'cfg(target_os = "linux")'.dependencies]
+rfd = { workspace = true, features = ["xdg-portal"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2.workspace = true
 objc2-foundation = { workspace = true, features = ["NSArray", "NSURL", "NSString"] }

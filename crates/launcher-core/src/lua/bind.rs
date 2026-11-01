@@ -262,7 +262,7 @@ pub fn install(lua: &Lua, shared: &Arc<Shared>, file: &Path, dir: &Path) -> mlua
     g.set("config_dir", dir.display().to_string())?;
     g.set("config_file", file.display().to_string())?;
     let os: Table = g.get("os")?;
-    os.set("name", if cfg!(windows) { "windows" } else { "macos" })?;
+    os.set("name", crate::config::catalog::Os::current().name())?;
 
     // ---- programs --------------------------------------------------------------------------------
     let sc = s.clone();

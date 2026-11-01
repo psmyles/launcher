@@ -176,10 +176,15 @@ pub fn env_from(
     #[cfg(not(windows))]
     {
         // The baseline is the same shell doing nothing: what zsh sets up on its own (PATH from
-        // ~/.zshenv, PWD, OLDPWD, SHLVL) isn't the script's doing.
-        let zsh = PathBuf::from("/bin/zsh");
+        // ~/.zshenv, PWD, OLDPWD, SHLVL) isn't the script's doing. Linux: bash, which is always
+        // there and is what setup scripts there are written for.
+        let shell = PathBuf::from(if cfg!(target_os = "macos") {
+            "/bin/zsh"
+        } else {
+            "/bin/bash"
+        });
         let (_, base) = output(
-            &zsh,
+            &shell,
             vec!["-c".into(), "/usr/bin/env -0".into()],
             None,
             cwd,
@@ -192,7 +197,7 @@ pub fn env_from(
             script.display().to_string(),
         ];
         a.extend(args.iter().cloned());
-        let (code, after) = output(&zsh, a, None, cwd, env, timeout)?;
+        let (code, after) = output(&shell, a, None, cwd, env, timeout)?;
         if code != 0 {
             return Err(format!("{} failed (exit code {code})", script.display()));
         }

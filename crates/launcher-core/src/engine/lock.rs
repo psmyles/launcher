@@ -41,14 +41,26 @@ fn take(path: &Path) -> Result<RunLock, LockError> {
         .write(true)
         .open(path)
         .map_err(|e| LockError::Io(format!("{}: {e}", path.display())))?;
-    match file.try_lock() {
-        Ok(()) => Ok(RunLock {
-            _file: file,
-            path: path.to_path_buf(),
-        }),
-        Err(std::fs::TryLockError::WouldBlock) => Err(LockError::Busy),
-        Err(std::fs::TryLockError::Error(e)) => {
-            Err(LockError::Io(format!("{}: {e}", path.display())))
+    // A lock just let go can still look held for a moment: a program being started on another
+    // thread holds a copy of every open file between fork and exec (Unix locks belong to the
+    // open file, not the descriptor). Try a few times before calling it busy.
+    let mut tries = 0;
+    loop {
+        match file.try_lock() {
+            Ok(()) => {
+                return Ok(RunLock {
+                    _file: file,
+                    path: path.to_path_buf(),
+                })
+            }
+            Err(std::fs::TryLockError::WouldBlock) if tries < 10 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(std::fs::TryLockError::WouldBlock) => return Err(LockError::Busy),
+            Err(std::fs::TryLockError::Error(e)) => {
+                return Err(LockError::Io(format!("{}: {e}", path.display())))
+            }
         }
     }
 }

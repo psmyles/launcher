@@ -64,7 +64,7 @@ pub const API: &[Item] = &[
     v("config_dir", "config_dir", "The folder of the .launcher file (relative paths resolve against it)."),
     v("config_file", "config_file", "The full path of the .launcher file."),
     v("env", "env.NAME", "The run's environment variables (read-only; env-from and run steps' env change them)."),
-    v("os.name", "os.name", "\"windows\" or \"macos\". The rest of Luau's `os` (os.time, os.clock, os.date) is there too."),
+    v("os.name", "os.name", "\"windows\", \"macos\" or \"linux\". The rest of Luau's `os` (os.time, os.clock, os.date) is there too."),
     // ---- programs ------------------------------------------------------------------------------
     f(
         "capture",

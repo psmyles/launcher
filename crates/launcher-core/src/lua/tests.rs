@@ -33,7 +33,7 @@ fn the_sandbox_has_no_side_doors() {
         v.eval_str("string.format('%d-%s', 3, os.name)").unwrap(),
         Dyn::str(format!(
             "3-{}",
-            if cfg!(windows) { "windows" } else { "macos" }
+            crate::config::catalog::Os::current().name()
         ))
     );
 }

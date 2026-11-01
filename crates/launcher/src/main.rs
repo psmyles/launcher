@@ -65,6 +65,7 @@ fn main() {
         }
     };
     timing::report("event loop built");
+    gfx::display_ready(&event_loop);
     let proxy = event_loop.create_proxy();
     #[cfg(target_os = "macos")]
     os::macos::install_open_documents(proxy.clone());

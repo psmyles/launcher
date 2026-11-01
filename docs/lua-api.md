@@ -12,7 +12,7 @@ A `.launcher` file's Luau code (`script` blocks, `(lua)"..."` values, conditions
 | `config_dir` | value | The folder of the .launcher file (relative paths resolve against it). |
 | `config_file` | value | The full path of the .launcher file. |
 | `env.NAME` | value | The run's environment variables (read-only; env-from and run steps' env change them). |
-| `os.name` | value | "windows" or "macos". The rest of Luau's `os` (os.time, os.clock, os.date) is there too. |
+| `os.name` | value | "windows", "macos" or "linux". The rest of Luau's `os` (os.time, os.clock, os.date) is there too. |
 | `capture(program, arg...) -> string` | load, run | Run a program without a console and return its output, with the trailing newline removed. A non-zero exit raises an error; pass a table last for options: {check=false, cwd=..., env={...}, stdin=..., timeout=ms}. |
 | `run(program, arg...) -> {exit_code}` | run | Run a program in the console, like a run step. A non-zero exit raises an error unless the last argument is {check=false}; other options: cwd, env, stdin, timeout, io. |
 | `step(label, function)` | run | Show the work the function does as its own step in the step list. |

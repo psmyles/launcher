@@ -1,5 +1,5 @@
-//! Ping: one ICMP echo. Windows uses iphlpapi (`icmp.rs`, from master); macOS asks `/sbin/ping`,
-//! which may send ICMP without privileges.
+//! Ping: one ICMP echo. Windows uses iphlpapi (`icmp.rs`, from master); macOS asks `/sbin/ping`
+//! and Linux `ping`, which may send ICMP without privileges.
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Reply {
@@ -21,8 +21,14 @@ pub fn ping(host: &str, timeout_ms: u64) -> Result<Reply, String> {
     if host.is_empty() {
         return Err("no host to ping".into());
     }
-    let out = std::process::Command::new("/sbin/ping")
-        .args(["-n", "-c", "1", "-W", &timeout_ms.max(1).to_string(), host])
+    // `-W` is milliseconds on macOS, whole seconds on Linux.
+    let (program, wait) = if cfg!(target_os = "macos") {
+        ("/sbin/ping", timeout_ms.max(1))
+    } else {
+        ("ping", timeout_ms.div_ceil(1000).max(1))
+    };
+    let out = std::process::Command::new(program)
+        .args(["-n", "-c", "1", "-W", &wait.to_string(), host])
         .output()
         .map_err(|e| format!("could not run ping: {e}"))?;
     let text = String::from_utf8_lossy(&out.stdout);

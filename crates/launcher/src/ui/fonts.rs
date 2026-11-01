@@ -5,8 +5,9 @@
 //! * Monospace, everywhere (the console, code, monospace labels): JetBrains Mono NL (OFL,
 //!   `JetBrainsMono-OFL.txt`). NL is the build without ligatures: egui shapes text, and a terminal
 //!   or code field must show `->` and `==` as typed.
-//! * Fallback behind Inter: Segoe UI on Windows; SF (the system font) on macOS. It's read on a
-//!   thread started at launch, so the disk read overlaps window creation.
+//! * Fallback behind Inter: Segoe UI on Windows; SF (the system font) on macOS; Noto Sans or
+//!   DejaVu Sans on Linux. It's read on a thread started at launch, so the disk read overlaps
+//!   window creation.
 //!
 //! Each face is named by its file (`Inter-Regular.ttf`), the name the theme's `fonts { }` uses.
 
@@ -24,16 +25,25 @@ fn fonts_dir() -> PathBuf {
         let windir = std::env::var_os("WINDIR").unwrap_or_else(|| r"C:\Windows".into());
         PathBuf::from(windir).join("Fonts")
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
         PathBuf::from("/System/Library/Fonts")
+    }
+    #[cfg(target_os = "linux")]
+    {
+        PathBuf::from("/usr/share/fonts/truetype")
     }
 }
 
 #[cfg(windows)]
 const SYSTEM_FACES: &[Face] = &[Face("segoeui.ttf", 0)];
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 const SYSTEM_FACES: &[Face] = &[Face("SFNS.ttf", 0), Face("Helvetica.ttc", 0)];
+#[cfg(target_os = "linux")]
+const SYSTEM_FACES: &[Face] = &[
+    Face("noto/NotoSans-Regular.ttf", 0),
+    Face("dejavu/DejaVuSans.ttf", 0),
+];
 
 /// The text face, compiled in.
 const TEXT_NAME: &str = "Inter-Regular.ttf";

@@ -415,7 +415,8 @@ mod imp {
                     &mut slave,
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
-                    &mut ws,
+                    // `*const` on Linux, `*mut` on macOS.
+                    &raw mut ws,
                 )
             };
             if r != 0 {

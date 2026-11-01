@@ -1709,11 +1709,7 @@ pub fn needs_met(def: &StepDef, cx: &Context, effects: &dyn Effects) -> Result<(
                     return Err(format!(
                         "\"{}\" only works on {}.",
                         def.name,
-                        if *os == crate::config::catalog::Os::Windows {
-                            "Windows"
-                        } else {
-                            "macOS"
-                        }
+                        crate::config::header::os_title(*os)
                     ));
                 }
             }
