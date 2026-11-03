@@ -579,7 +579,7 @@ impl<'a> FormUi<'a> {
                 ui.horizontal(|ui| {
                     for (k, t) in shown.iter().enumerate() {
                         let title = self.text(&t.title, &t.node, "title");
-                        if ui.selectable_label(k == sel, title).clicked() {
+                        if theme::selectable(ui, k == sel, title).clicked() {
                             sel = k;
                         }
                     }
@@ -701,6 +701,8 @@ impl<'a> FormUi<'a> {
             Width::Field => (Some(self.field_w), false),
             Width::Px(w) => (Some(w), false),
             Width::Auto => (None, false),
+            // A row of option buttons, a checklist and a tick box are as wide as their text.
+            Width::Fill if !stretches(c) => (None, false),
             // It takes the room there is (the window fits `min_field`, so it has that much
             // unless something narrows the form, such as the log beside it).
             Width::Fill => (Some(ui.available_width().max(0.0)), true),
@@ -764,11 +766,16 @@ impl<'a> FormUi<'a> {
         let (_, fill) = self.field_width(ui, c);
         if fill_button && !self.in_row {
             self.reach(self.field_x + self.field_w);
-        } else if fill {
-            self.reach(start + self.min_field);
         } else {
-            // Everything on the line so far (a refresh button beside a list, say).
-            self.reach(ui.min_rect().right());
+            // A fill-width control counts at least the field column.
+            if matches!(c.width, Width::Fill) {
+                self.reach(start + self.min_field);
+            }
+            // Unless it stretches to the edge, everything on the line so far (a refresh button
+            // beside a list, say).
+            if !fill {
+                self.reach(ui.min_rect().right());
+            }
         }
         // A row's first checkbox fills the label column, so the next item starts at the field.
         if place == Place::RowFirst && matches!(c.kind, ControlKind::Checkbox) {
@@ -847,7 +854,7 @@ impl<'a> FormUi<'a> {
 
     /// The widget; `None` when there's nothing to hover.
     fn widget(&mut self, ui: &mut Ui, c: &Control) -> Option<egui::Response> {
-        let (w, _) = self.field_width(ui, c);
+        let (w, fill) = self.field_width(ui, c);
         let value = self.cx.form.value(&c.id);
         let h = ui.spacing().interact_size.y;
         match &c.kind {
@@ -861,6 +868,28 @@ impl<'a> FormUi<'a> {
                 let error = match result {
                     Some(Err(e)) if !loading => Some(e.clone()),
                     _ => None,
+                };
+                // A list that stretches leaves room for what follows it on the line: the refresh
+                // button (the spinner while loading) and the problem sign.
+                let w = match w {
+                    Some(w) if fill => {
+                        let spacing = ui.spacing().item_spacing.x;
+                        let mut after = 0.0;
+                        if computed {
+                            after += spacing;
+                            after += if loading {
+                                h
+                            } else {
+                                text_width(ui, "⟳", egui::TextStyle::Button)
+                                    + 2.0 * ui.spacing().button_padding.x
+                            };
+                        }
+                        if error.is_some() {
+                            after += spacing + text_width(ui, "⚠", egui::TextStyle::Body);
+                        }
+                        Some((w - after).max(0.0))
+                    }
+                    w => w,
                 };
                 let r = if loading {
                     let r = ui.add_sized(
@@ -1187,6 +1216,28 @@ pub fn shown_controls(config: &Config, live: &Live) -> Vec<String> {
     out
 }
 
+/// How wide `text` is on one line, in `style`.
+fn text_width(ui: &Ui, text: &str, style: egui::TextStyle) -> f32 {
+    let font = style.resolve(ui.style());
+    ui.painter()
+        .layout_no_wrap(text.to_string(), font, egui::Color32::WHITE)
+        .size()
+        .x
+}
+
+/// Whether a control's widget takes the width it's given: a row of option buttons, a checklist
+/// and a tick box are as wide as their text.
+fn stretches(c: &Control) -> bool {
+    !matches!(
+        c.kind,
+        ControlKind::Checkbox
+            | ControlKind::Choice {
+                style: ChoiceStyle::Radio { .. } | ChoiceStyle::Checklist,
+                ..
+            }
+    )
+}
+
 /// The labels drawn in the label column: controls on lines of their own (not checkboxes or
 /// buttons, which carry their own), in sections and pages too.
 fn label_texts(config: &Config, items: &[Item], f: &mut dyn FnMut(&str)) {
@@ -1275,6 +1326,7 @@ mod tests {
     use super::*;
     use crate::ui::contrast;
     use crate::ui::theme::{Theme, BUILT_IN};
+    use launcher_core::eval::LoadResults;
 
     #[test]
     fn every_number_reads_on_its_badge() {
@@ -1285,6 +1337,150 @@ mod tests {
                 let r = contrast::ratio(*c, bg);
                 assert!(r >= contrast::MIN, "{c:?} on {bg:?} is {r:.2}:1");
             }
+        }
+    }
+
+    /// Launcher's dark theme, as the window has it.
+    fn context() -> egui::Context {
+        let ctx = egui::Context::default();
+        Theme::built_in().install(&ctx);
+        ctx.set_theme(egui::Theme::Dark);
+        ctx
+    }
+
+    /// One frame of `draw` in an 800×600 window, with the pointer at `pointer`.
+    fn frame<R>(ctx: &egui::Context, pointer: egui::Pos2, mut draw: impl FnMut(&mut Ui) -> R) -> R {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                Vec2::new(800.0, 600.0),
+            )),
+            events: vec![egui::Event::PointerMoved(pointer)],
+            ..Default::default()
+        };
+        let mut out = None;
+        let mut output = ctx.run_ui(raw, |ui| out = Some(draw(ui)));
+        // Nothing paints, so the font atlas is never uploaded.
+        output.textures_delta.clear();
+        out.expect("drawn")
+    }
+
+    #[test]
+    fn a_page_tab_keeps_its_size_when_hovered() {
+        let ctx = context();
+        let tabs = |ui: &mut Ui| {
+            ui.horizontal(|ui| {
+                theme::selectable(ui, true, "Run");
+                let profile = theme::selectable(ui, false, "Profile").rect;
+                let checks = theme::selectable(ui, false, "Checks").rect;
+                (profile, checks)
+            })
+            .inner
+        };
+        let away = egui::pos2(700.0, 500.0);
+        let before = frame(&ctx, away, tabs);
+        // A widget draws in the state it had the frame before.
+        frame(&ctx, before.0.center(), tabs);
+        let hovered = frame(&ctx, before.0.center(), tabs);
+        assert_eq!(before, hovered);
+    }
+
+    /// What drawing a tool's form showed.
+    struct Drawn {
+        /// The form's left and right edges.
+        left: f32,
+        right: f32,
+        need: f32,
+        rects: Vec<(NodePath, egui::Rect)>,
+    }
+
+    /// Draw a tool's form once, with these load results; `loaded` as the window has it.
+    fn draw_tool(src: &str, results: LoadResults, loaded: bool) -> Drawn {
+        let file = load_str(
+            src,
+            std::path::Path::new("t.launcher"),
+            &LoadOptions::default(),
+        );
+        assert!(file.diags.iter().all(|d| !d.is_error()), "{:?}", file.diags);
+        let form = Form::new(
+            std::sync::Arc::new(file.config),
+            results,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        let (live, env, refreshing) = (Live::default(), BTreeMap::new(), BTreeSet::new());
+        frame(&context(), egui::pos2(700.0, 500.0), |ui| {
+            let mut f = FormUi::new(FormCx {
+                form: &form,
+                live: &live,
+                env: &env,
+                refreshing: &refreshing,
+                loaded,
+                locked: false,
+                blocked: None,
+                pick: false,
+                selected: None,
+                numbers: None,
+            });
+            let (left, right) = (ui.max_rect().left(), ui.max_rect().right());
+            f.show(ui);
+            Drawn {
+                left,
+                right,
+                need: f.need,
+                rects: f.rects,
+            }
+        })
+    }
+
+    #[test]
+    fn the_natural_width_counts_controls_as_wide_as_their_text() {
+        let d = draw_tool(
+            r#"
+            tool "T" format=2 requires="0.2"
+            window field-width=200 {
+                choice "mode" label="Start in" show-as="buttons" {
+                    option "Game" value="game"
+                    option "Pattern sandbox" value="patterns"
+                    option "Robot sandbox" value="robots"
+                    option "Benchmark" value="bench"
+                }
+                tick-box "long" label="A tick box with a label longer than its field column"
+            }
+            "#,
+            LoadResults::default(),
+            true,
+        );
+        assert_eq!(d.rects.len(), 2);
+        for (path, r) in d.rects {
+            let right = r.right() - d.left;
+            assert!(right <= d.need, "{path:?} ends at {right}, past {}", d.need);
+        }
+    }
+
+    #[test]
+    fn a_stretching_list_leaves_room_for_its_refresh_button() {
+        let src = r#"
+            tool "T" format=2 requires="0.2"
+            window { choice "pattern" label="Pattern" options=(lua)"{'all'}" }
+        "#;
+        let failed = LoadResults {
+            options: [("pattern".to_string(), Err("no patterns".to_string()))].into(),
+            ..Default::default()
+        };
+        for (what, results, loaded) in [
+            ("listed", LoadResults::default(), true),
+            ("loading", LoadResults::default(), false),
+            ("failed", failed, true),
+        ] {
+            let d = draw_tool(src, results, loaded);
+            let (_, r) = &d.rects[0];
+            assert!(
+                r.right() <= d.right,
+                "{what}: the line ends at {}, past the form's edge at {}",
+                r.right(),
+                d.right
+            );
         }
     }
 }

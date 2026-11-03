@@ -208,6 +208,24 @@ pub fn gap_small(ui: &mut egui::Ui) {
     ui.add_space(g);
 }
 
+/// A selectable button (a page tab) that keeps its size when hovered. egui takes the outline's
+/// width off a button's padding, but an unselected button has no outline until it's hovered, so
+/// it grew by the inactive outline on hover and pushed along what followed it. It never shows the
+/// inactive outline, so it gets none.
+pub fn selectable<'a>(
+    ui: &mut egui::Ui,
+    selected: bool,
+    atoms: impl egui::IntoAtoms<'a>,
+) -> egui::Response {
+    ui.scope(|ui| {
+        if !selected {
+            ui.visuals_mut().widgets.inactive.bg_stroke.width = 0.0;
+        }
+        ui.add(egui::Button::selectable(selected, atoms))
+    })
+    .inner
+}
+
 fn extras_id(dark: bool) -> egui::Id {
     egui::Id::new(("launcher-theme-extras", dark))
 }

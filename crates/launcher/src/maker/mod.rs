@@ -1201,14 +1201,14 @@ impl Maker {
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new("Steps for the button:").weak());
                 for (id, label) in &buttons {
-                    let b = match numbers.get(id) {
-                        Some(n) => egui::Button::selectable(
-                            self.shown == *id,
-                            (number_text(ui, *n), RichText::new(label)),
-                        ),
-                        None => egui::Button::selectable(self.shown == *id, label.as_str()),
+                    let on = self.shown == *id;
+                    let r = match numbers.get(id) {
+                        Some(n) => {
+                            theme::selectable(ui, on, (number_text(ui, *n), RichText::new(label)))
+                        }
+                        None => theme::selectable(ui, on, label.as_str()),
                     };
-                    if ui.add(b).clicked() {
+                    if r.clicked() {
                         self.shown = id.clone();
                         self.sel = None;
                     }

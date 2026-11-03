@@ -621,9 +621,15 @@ impl Editor {
     fn bottom_ui(&mut self, ui: &mut Ui, problems: &[Diagnostic]) {
         ui.horizontal(|ui| {
             let n = problems.len();
-            ui.selectable_value(&mut self.tab, Tab::Problems, format!("Problems ({n})"));
-            ui.selectable_value(&mut self.tab, Tab::DryRun, "Dry run");
-            ui.selectable_value(&mut self.tab, Tab::Text, "Text");
+            for (tab, text) in [
+                (Tab::Problems, format!("Problems ({n})")),
+                (Tab::DryRun, "Dry run".to_string()),
+                (Tab::Text, "Text".to_string()),
+            ] {
+                if theme::selectable(ui, self.tab == tab, text).clicked() {
+                    self.tab = tab;
+                }
+            }
         });
         ui.separator();
         match self.tab {
