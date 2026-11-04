@@ -1385,6 +1385,35 @@ mod tests {
         assert_eq!(before, hovered);
     }
 
+    #[test]
+    fn a_tab_that_does_not_fit_its_wrapped_line_moves_to_the_next_whole() {
+        let width = 300.0;
+        let (left, rects) = frame(&context(), egui::pos2(700.0, 500.0), |ui| {
+            let left = ui.cursor().min.x;
+            let rects = ui
+                .allocate_ui(Vec2::new(width, 400.0), |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label("Steps for the button:");
+                        [
+                            "Run",
+                            "Build only",
+                            "Open Tracy viewer",
+                            "Build Tracy tools",
+                        ]
+                        .map(|t| theme::selectable(ui, t == "Run", t).rect)
+                    })
+                    .inner
+                })
+                .inner;
+            (left, rects)
+        });
+        let h = rects[0].height();
+        for r in rects {
+            assert!(r.right() - left <= width, "{r:?} is past {width}");
+            assert_eq!(r.height(), h, "{r:?} is on more than one line");
+        }
+    }
+
     /// What drawing a tool's form showed.
     struct Drawn {
         /// The form's left and right edges.
