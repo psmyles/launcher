@@ -29,8 +29,8 @@ part is decision **AC14**, plus AC4 for the exit code.
 - The add-on now finds only `3d-review-cli`, which first ships in the 3D Review release after 0.8.0.
   Release Launcher after that 3D Review release; otherwise 3D Review 0.8.0 users get "3D Review isn't
   installed… or it is too old".
-- `product.json` still says 0.2.1. Bump it for the release, and have `asset-check.launcher` require
-  that version: an older Launcher doesn't know `table`.
+- **The version is 0.3.0** (`product.json` and the workspace `Cargo.toml`), what
+  `asset-check.launcher` requires: an older Launcher doesn't know `table` or `show-log`.
 
 ## What step 4 writes
 
@@ -179,9 +179,6 @@ results files:
     (its AC16).
   - A distinct code, such as 2 for "couldn't load the file", would let a hook tell this from the
     person's choice. Then it could report the problem, rather than guess.
-- **`crates/launcher/tests/cli.rs` `version_and_help` fails.** `product.json` says 0.2.1 (since
-  `efc42e5`, before this work) but the workspace `Cargo.toml` still says 0.2.0, and the test looks
-  for Cargo's version in `--version`. Bring the two into line at the release bump.
 - **The visual editor shows a table and keeps it on save, but can't edit it.** Its button tabs list
   only the window's buttons, so a table button's steps can't be reached there.
 - **`docs/theme-reference.kdl` fails its test on Windows.** egui's
