@@ -63,10 +63,10 @@ window close-code=1 width=720 {
     }
 }
 
-steps "reveal" {
+steps "reveal" show-log=#false {
     core.note "said" text="group path={findings.path} rule={findings.rule}"
 }
-steps "open" {
+steps "open" show-log=#false {
     core.note "said" text="open path={findings.path}"
 }
 steps "explain" {

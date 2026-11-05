@@ -69,6 +69,10 @@ struct Win {
     repaint_at: Option<Instant>,
     /// The last normal (not maximized or minimized) rect, for the state file.
     normal_rect: Option<Rect>,
+    /// The client size as of the last `Resized` (not minimized).
+    size: PhysicalSize<u32>,
+    /// Sizes Launcher asked for whose `Resized` may still come. Any other change is the user's.
+    asked: Vec<PhysicalSize<u32>>,
 }
 
 impl Shell {
@@ -192,6 +196,8 @@ impl Shell {
             shown: false,
             repaint_at: None,
             normal_rect: rect,
+            size: window.inner_size(),
+            asked: Vec::new(),
         });
 
         // The first frame, while hidden: lay out, draw, present, then show.
@@ -306,8 +312,44 @@ impl Shell {
         if want.width.abs_diff(have.width) <= 1 && want.height.abs_diff(have.height) <= 1 {
             return false;
         }
-        let _ = w.window.request_inner_size(want);
+        self.ask_size(want);
         true
+    }
+
+    /// Resize the window, remembering that this size is Launcher's doing, not the user's.
+    fn ask_size(&mut self, size: PhysicalSize<u32>) {
+        let Some(w) = self.win.as_mut() else { return };
+        w.asked.push(size);
+        // Only the last few can still be on their way.
+        if w.asked.len() > 8 {
+            w.asked.remove(0);
+        }
+        let _ = w.window.request_inner_size(size);
+    }
+
+    /// The window's client size changed: if Launcher didn't ask for it, the user resized or
+    /// maximized it, and a tool's window keeps their size from then on.
+    fn resized(&mut self, size: PhysicalSize<u32>) {
+        let Some(w) = self.win.as_mut() else { return };
+        // Minimized, or back from it at the same size: not a resize.
+        if size.width == 0 || size.height == 0 {
+            return;
+        }
+        let near = |a: &PhysicalSize<u32>| {
+            a.width.abs_diff(size.width) <= 1 && a.height.abs_diff(size.height) <= 1
+        };
+        let same = near(&w.size);
+        w.size = size;
+        if same {
+            return;
+        }
+        if let Some(i) = w.asked.iter().position(near) {
+            w.asked.drain(..=i);
+            return;
+        }
+        if w.shown {
+            self.app.sized_by_user();
+        }
     }
 
     fn frame(&mut self) {
@@ -326,6 +368,7 @@ impl Shell {
         let title = self.app.title();
         let resizable = self.app.resizable();
         let request = self.app.take_request();
+        let mut grow = None;
         if let Some(w) = &self.win {
             if w.window.title() != title {
                 w.window.set_title(&title);
@@ -343,15 +386,19 @@ impl Shell {
                     if !w.window.is_maximized()
                         && (want.width > have.width || want.height > have.height)
                     {
-                        let size = PhysicalSize::new(
+                        grow = Some(PhysicalSize::new(
                             want.width.max(have.width),
                             want.height.max(have.height),
-                        );
-                        let _ = w.window.request_inner_size(size);
-                        w.window.request_redraw();
+                        ));
                     }
                 }
                 None => {}
+            }
+        }
+        if let Some(size) = grow {
+            self.ask_size(size);
+            if let Some(w) = &self.win {
+                w.window.request_redraw();
             }
         }
     }
@@ -510,6 +557,7 @@ impl ApplicationHandler<AppEvent> for Shell {
                     if let Some(gpu) = self.gpu.as_mut() {
                         gpu.resize([size.width, size.height]);
                     }
+                    self.resized(size);
                 }
                 WindowEvent::Focused(focused) => {
                     self.focused = focused;

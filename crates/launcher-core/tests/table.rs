@@ -104,6 +104,10 @@ fn a_tool_table_reads_into_the_model() {
     assert_eq!((dont.after, dont.exit_code), (After::Exit, Some(1)));
     assert_eq!(l.config.action("commit").unwrap().exit_code, Some(0));
     assert_eq!(l.config.action("explain").unwrap().exit_code, None);
+    // Showing or opening a file doesn't open the log; everything else does.
+    let shows_log = |id: &str| l.config.action(id).unwrap().show_log;
+    assert!(!shows_log("reveal") && !shows_log("open"));
+    assert!(shows_log("explain") && shows_log("dont"));
 }
 
 #[test]

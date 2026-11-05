@@ -495,6 +495,9 @@ pub struct Action {
     /// (`exit-code`; 0 when not given).
     pub exit_code: Option<i32>,
     pub lock: Option<Val>,
+    /// Open the log beside the window while it runs (`show-log`, default true). Without it the
+    /// log opens only when a step fails or asks something.
+    pub show_log: bool,
     pub steps: Vec<Step>,
     pub node: NodeRef,
 }

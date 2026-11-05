@@ -38,6 +38,8 @@ pub enum Stored {
 pub struct State {
     pub window: Option<Rect>,
     pub maximized: bool,
+    /// The user resized the window, so it opens at their size instead of fitting its content.
+    pub sized: bool,
     pub editor: Option<Rect>,
     pub editor_maximized: bool,
     pub values: BTreeMap<String, Stored>,
@@ -110,6 +112,7 @@ pub fn parse(text: &str) -> State {
             "window" => {
                 st.window = rect();
                 st.maximized = maximized;
+                st.sized = prop("sized").and_then(|v| v.as_bool()).unwrap_or(false);
             }
             "editor" => {
                 st.editor = rect();
@@ -198,11 +201,11 @@ pub fn render(about: &str, st: &State) -> String {
         "// Launcher state for {about} (written by the launcher; safe to delete)"
     );
     let _ = writeln!(out, "state version={STATE_VERSION}");
-    let rect = |out: &mut String, name: &str, r: Option<Rect>, max: bool| {
+    let rect = |out: &mut String, name: &str, r: Option<Rect>, max: bool, extra: &str| {
         if let Some(r) = r {
             let _ = writeln!(
                 out,
-                "{name} x={} y={} width={} height={} maximized={}",
+                "{name} x={} y={} width={} height={} maximized={}{extra}",
                 r.x,
                 r.y,
                 r.width,
@@ -211,8 +214,9 @@ pub fn render(about: &str, st: &State) -> String {
             );
         }
     };
-    rect(&mut out, "window", st.window, st.maximized);
-    rect(&mut out, "editor", st.editor, st.editor_maximized);
+    let sized = if st.sized { " sized=#true" } else { "" };
+    rect(&mut out, "window", st.window, st.maximized, sized);
+    rect(&mut out, "editor", st.editor, st.editor_maximized, "");
     for (k, v) in &st.values {
         let line = match v {
             Stored::Bool(b) => {
@@ -273,6 +277,28 @@ mod tests {
             .insert("branch".into(), vec!["main".into(), "feature/x".into()]);
         let text = render("C:\\x\\build.launcher", &st);
         assert_eq!(parse(&text), st);
+    }
+
+    #[test]
+    fn a_window_the_user_sized_round_trips() {
+        let st = State {
+            window: Some(Rect {
+                x: 10,
+                y: 20,
+                width: 1200,
+                height: 900,
+            }),
+            sized: true,
+            ..State::default()
+        };
+        let text = render("C:\\x\\asset-check.launcher", &st);
+        assert!(text.contains("maximized=#false sized=#true\n"), "{text}");
+        assert_eq!(parse(&text), st);
+        let fitted = State {
+            sized: false,
+            ..st.clone()
+        };
+        assert!(!render("x", &fitted).contains("sized"));
     }
 
     #[test]

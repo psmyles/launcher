@@ -271,6 +271,7 @@ const STEPS_PROPS: &[(&str, &str)] = &[
     ("exit-code", "exit-code"),
     ("lock", "lock"),
     ("label", "label"),
+    ("show-log", "show-log"),
 ];
 const STEP_PROPS: &[(&str, &str)] = &[
     ("label", "label"),

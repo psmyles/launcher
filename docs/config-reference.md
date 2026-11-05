@@ -19,9 +19,9 @@ The header, first in the file. The launcher reads it before anything else.
 The window.
 
 - `title` (template, default `Launcher`): The window title.
-- `width` (number): Fixed width (logical px). Without it the window fits its content.
-- `height` (number): Fixed height (logical px). Without it the window fits its content.
-- `resizable` (#true|#false, default `#true`): Let the user resize the window.
+- `width` (number): The window's width (logical px). Without it the window fits its content. With `width` or `height` the user can resize the window (unless resizable=#false): it keeps their size, and opens at it next time.
+- `height` (number): The window's height (logical px). Without it the window fits its content until the user resizes it. A window taller than its content gives the room to its first table.
+- `resizable` (#true|#false, default `#true`): Let the user resize a window that has a `width` or `height` (one that fits its content can't be resized).
 - `theme` (word: system | dark | light, default `system`): Dark or light colours, or follow the system.
 - `label-width` (number, default `140`): Width of the label column (logical px).
 - `field-width` (number, default `260`): Width of the field column while the window fits its content (logical px).
@@ -64,6 +64,7 @@ Steps a button (or `launcher run --action`) carries out, in order.
 - `after` (word: stay | exit | minimize, default `stay`): After a successful run: keep the window, close it, or minimize it.
 - `exit-code` (integer, default `0`): With after="exit": the code Launcher exits with when the run closes the window (`launcher run` too).
 - `lock` (template): A file path guarding a shared resource: two runs holding the same lock never overlap, even from different files.
+- `show-log` (#true|#false, default `#true`): Open the log beside the window while the steps run. With #false it opens only if a step fails or asks something: for quick steps such as showing a file.
 - block: steps
 
 ## Layout

@@ -158,6 +158,11 @@ pub struct FormUi<'a> {
     rects: Vec<(NodePath, egui::Rect)>,
     /// Where each table button was drawn: (button id, the row it chooses, rect).
     pub table_buttons: Vec<(String, String, egui::Rect)>,
+    /// The first table's rows take this height, whatever they need: the window's height isn't
+    /// the content's, and this is what fills it. None: the table's own `height` at most.
+    pub table_fill: Option<f32>,
+    /// The height the first table's rows took this frame (none drawn: None).
+    pub table_used: Option<f32>,
 }
 
 /// The Browse button's width.
@@ -189,6 +194,8 @@ impl<'a> FormUi<'a> {
             events: Vec::new(),
             rects: Vec::new(),
             table_buttons: Vec::new(),
+            table_fill: None,
+            table_used: None,
         }
     }
 
@@ -462,6 +469,11 @@ impl<'a> FormUi<'a> {
     }
 
     fn item(&mut self, ui: &mut Ui, it: &Item) {
+        // A hidden item takes no room, not even the gap egui leaves after anything drawn: seven
+        // hidden fields at the top of a window would push the rest down by seven gaps.
+        if self.hidden(it) {
+            return;
+        }
         let rect = ui.scope(|ui| self.item_inner(ui, it)).response.rect;
         let config = self.cx.form.config().clone();
         let path = match it {
@@ -478,6 +490,26 @@ impl<'a> FormUi<'a> {
             if rect.width() > 0.0 && rect.height() > 0.0 {
                 self.rects.push((p, rect));
             }
+        }
+    }
+
+    /// An item its `visible-if` hides.
+    fn hidden(&self, it: &Item) -> bool {
+        match it {
+            Item::Control(i) => {
+                let c = &self.cx.form.config().controls[*i];
+                !self.visible(&c.node, &c.visible_if)
+            }
+            Item::Row {
+                node, visible_if, ..
+            }
+            | Item::Group {
+                node, visible_if, ..
+            }
+            | Item::Note {
+                node, visible_if, ..
+            } => !self.visible(node, visible_if),
+            _ => false,
         }
     }
 
@@ -1232,11 +1264,20 @@ impl<'a> FormUi<'a> {
                     } else if rows.is_empty() {
                         ui.label(RichText::new("Nothing to show").weak());
                     } else {
-                        egui::ScrollArea::vertical()
-                            .id_salt(("table", &c.id))
-                            .max_height(t.height)
-                            .auto_shrink([false, true])
-                            .show(ui, |ui| self.table_rows(ui, c, t, &rows, enabled));
+                        // The first table fills the window's spare height, when it has some.
+                        let first = self.table_used.is_none();
+                        let area = egui::ScrollArea::vertical().id_salt(("table", &c.id));
+                        let area = match self.table_fill.filter(|_| first) {
+                            Some(h) => area
+                                .max_height(h)
+                                .min_scrolled_height(h)
+                                .auto_shrink([false, false]),
+                            None => area.max_height(t.height).auto_shrink([false, true]),
+                        };
+                        let out = area.show(ui, |ui| self.table_rows(ui, c, t, &rows, enabled));
+                        if first {
+                            self.table_used = Some(out.inner_rect.height());
+                        }
                     }
                 });
         });
@@ -1801,9 +1842,7 @@ mod tests {
     /// A table tool, its rows worked out, and its Lua results for the form's values (`live`:
     /// whether the evaluation thread has answered yet).
     fn table_form(live: bool) -> (Form, Live) {
-        use launcher_core::engine::effects::MockEffects;
-        use launcher_core::eval::Evaluator;
-        let file = load_str(
+        evaluated_form(
             r#"tool "T" format=2
             window width=600 {
                 table "t" rows=(lua)"{ {title='Old tool'}, {path='a.png', title='A'}, {path='b.fbx', title='B1'}, {path='b.fbx', title='B2'} }" group-by="path" row-label="{title}" {
@@ -1814,6 +1853,17 @@ mod tests {
             steps "reveal" { core.wait "w" ms=1; }
             steps "explain" { core.wait "w" ms=1; }
             "#,
+            live,
+        )
+    }
+
+    /// A tool's form, its load-time Lua run, and its conditions worked out (`live`: whether the
+    /// evaluation thread has answered yet).
+    fn evaluated_form(src: &str, live: bool) -> (Form, Live) {
+        use launcher_core::engine::effects::MockEffects;
+        use launcher_core::eval::Evaluator;
+        let file = load_str(
+            src,
             std::path::Path::new("t.launcher"),
             &LoadOptions::default(),
         );
@@ -1900,6 +1950,95 @@ mod tests {
             events.extend(table_frame(ctx, form, live, vec![input]).1);
         }
         events
+    }
+
+    /// The height the table's rows take, given the height to fill (None: its own).
+    fn table_height(ctx: &egui::Context, form: &Form, live: &Live, fill: Option<f32>) -> f32 {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                Vec2::new(800.0, 900.0),
+            )),
+            ..Default::default()
+        };
+        let (env, refreshing) = (BTreeMap::new(), BTreeSet::new());
+        let mut used = None;
+        let mut output = ctx.run_ui(raw, |ui| {
+            let mut f = FormUi::new(FormCx {
+                form,
+                live,
+                env: &env,
+                refreshing: &refreshing,
+                loaded: true,
+                locked: false,
+                blocked: None,
+                pick: false,
+                selected: None,
+                numbers: None,
+            });
+            f.table_fill = fill;
+            f.show(ui);
+            used = f.table_used;
+        });
+        output.textures_delta.clear();
+        used.expect("the table's rows are drawn")
+    }
+
+    #[test]
+    fn a_table_fills_the_height_its_given() {
+        let ctx = context();
+        let (form, live) = table_form(true);
+        // Its own: what the rows need, up to its `height` (320 when not given).
+        let own = table_height(&ctx, &form, &live, None);
+        assert!(own > 0.0 && own <= 320.0, "{own}");
+        // A tall window: the rows take all of it, past what they need.
+        assert_eq!(table_height(&ctx, &form, &live, Some(640.0)), 640.0);
+        // A short one: they scroll in less than they need.
+        assert_eq!(table_height(&ctx, &form, &live, Some(60.0)), 60.0);
+    }
+
+    #[test]
+    fn hidden_items_take_no_room() {
+        // Where the visible field starts, after hidden fields, a hidden note and a hidden row.
+        let top_of_b = |src: &str| {
+            let (form, live) = evaluated_form(src, true);
+            let b = form.config().control("b").expect("b").node.path.clone();
+            let (env, refreshing) = (BTreeMap::new(), BTreeSet::new());
+            frame(&context(), egui::pos2(700.0, 500.0), |ui| {
+                let top = ui.cursor().top();
+                let mut f = FormUi::new(FormCx {
+                    form: &form,
+                    live: &live,
+                    env: &env,
+                    refreshing: &refreshing,
+                    loaded: true,
+                    locked: false,
+                    blocked: None,
+                    pick: false,
+                    selected: None,
+                    numbers: None,
+                });
+                f.show(ui);
+                let (_, r) = f.rects.iter().find(|(p, _)| *p == b).expect("b drawn");
+                r.top() - top
+            })
+        };
+        let alone = top_of_b(
+            r#"tool "T" format=2
+            window { text "pad" show-if="false"; text "b" label="B"; }"#,
+        );
+        let after_hidden = top_of_b(
+            r#"tool "T" format=2
+            window {
+                text "a" show-if="false"
+                text "b" label="B"
+                text "c" show-if="false"
+                info "Not now" show-if="false"
+                row show-if="false" { text "d"; }
+            }"#,
+        );
+        assert_eq!(alone, 0.0);
+        assert_eq!(after_hidden, 0.0);
     }
 
     #[test]

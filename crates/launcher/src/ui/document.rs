@@ -18,7 +18,7 @@ use launcher_core::config::cache::{self, Opened};
 use launcher_core::config::catalog::Os;
 use launcher_core::config::summary::summary;
 use launcher_core::config::{
-    Action, After, ChoiceStyle, Config, ControlKind, Diagnostic, Item, LoadOptions, Val,
+    Action, After, ChoiceStyle, Config, ControlKind, Diagnostic, Item, LoadOptions, Val, WindowSpec,
 };
 use launcher_core::dynval::Dyn;
 use launcher_core::engine::effects::RealEffects;
@@ -40,6 +40,8 @@ use crate::ui::theme;
 const RUN_PANEL: (f32, f32) = (520.0, 480.0);
 /// The editor's.
 const EDITOR_SIZE: (f32, f32) = (1280.0, 820.0);
+/// The least a table filling the window's height shrinks to (logical px).
+const TABLE_LEAST: f32 = 96.0;
 
 /// A question the document itself asks.
 enum Asking {
@@ -75,8 +77,11 @@ pub struct Document {
     /// Scripts, values and lists that failed to load; on-change errors.
     errors: Vec<String>,
     refreshing: BTreeSet<String>,
-    /// The newest run: the log beside the window shows while there is one.
+    /// The newest run: the log beside the window shows while there is one, unless `run_hidden`.
     run: Option<RunView>,
+    /// The run goes without the log (`show-log=#false`): it opens only if the run fails or asks
+    /// something, and a run that goes well leaves no trace.
+    run_hidden: bool,
     /// The log's console, with every run since it opened.
     log: Option<SharedTerm>,
     /// A run couldn't start (another run holds the lock, say).
@@ -90,10 +95,18 @@ pub struct Document {
     notification: Option<(String, String, bool)>,
     /// The content's size (logical px), measured on the last frame.
     size: (f32, f32),
+    /// The window's size (logical px) as the form was last drawn without the log.
+    window_size: (f32, f32),
     /// The window's margin in the theme, as of the last frame.
     margin: f32,
     /// The form's width beside the log (the window's side of the line, its margins in it).
     form_width: f32,
+    /// The user resized or maximized a resizable window (this time or, from the state file, an
+    /// earlier one): it keeps their size instead of fitting its content.
+    user_sized: bool,
+    /// While the window's height isn't the content's: the first table's height, which takes up
+    /// what's left (worked out from the last frame).
+    table_fill: Option<f32>,
     /// The visual editor, when open (it replaces the form).
     editor: Option<crate::maker::AnyEditor>,
     /// `--set id=value` from the command line: the form starts with them (again after a reload).
@@ -156,6 +169,7 @@ impl Document {
             errors: Vec::new(),
             refreshing: BTreeSet::new(),
             run: None,
+            run_hidden: false,
             log: None,
             run_error: None,
             reload_pending: false,
@@ -163,8 +177,11 @@ impl Document {
             request: None,
             notification: None,
             size: (0.0, 0.0),
+            window_size: (0.0, 0.0),
             margin: 0.0,
             form_width: 0.0,
+            user_sized: false,
+            table_fill: None,
             editor: None,
             sets,
             exit_code: None,
@@ -546,7 +563,7 @@ impl Document {
 
     /// The window size the content asks for (logical px), or `None` to keep the window's.
     pub fn fit_size(&self) -> Option<(f32, f32)> {
-        if self.run.is_some() || self.editor.is_some() {
+        if self.log_shown() || self.editor.is_some() || self.keeps_user_size() {
             return None;
         }
         let w = self.config().map(|c| c.window.clone())?;
@@ -557,15 +574,47 @@ impl Document {
 
     /// Whether the user may resize the window.
     pub fn resizable(&self) -> bool {
-        if self.run.is_some() || self.editor.is_some() {
+        if self.log_shown() || self.editor.is_some() {
             return true;
         }
         match self.config() {
-            Some(c) => {
-                c.window.resizable && (c.window.width.is_some() || c.window.height.is_some())
-            }
+            Some(c) => sizable(&c.window),
             None => true,
         }
+    }
+
+    /// The user resized or maximized the window: from now on it keeps their size. Returns whether
+    /// that counts, for the state file: only the form's own window does, when it may be resized
+    /// (not one widened for the log, or the editor's).
+    pub fn sized_by_user(&mut self) -> bool {
+        let counts = !self.log_shown()
+            && self.editor.is_none()
+            && self.config().is_some_and(|c| sizable(&c.window));
+        self.user_sized |= counts;
+        counts
+    }
+
+    /// The window opens at the size the user left it (the state file says they resized it).
+    pub fn set_user_sized(&mut self, sized: bool) {
+        self.user_sized = sized;
+    }
+
+    /// The window keeps the size the user gave it instead of fitting the content.
+    fn keeps_user_size(&self) -> bool {
+        self.user_sized && self.config().is_some_and(|c| sizable(&c.window))
+    }
+
+    /// The window's height isn't the content's (the user sized it, the tool fixed it, or the log
+    /// shows beside it): the first table takes up what's left.
+    fn fills_height(&self) -> bool {
+        self.log_shown()
+            || self.keeps_user_size()
+            || self.config().is_some_and(|c| c.window.height.is_some())
+    }
+
+    /// The log shows beside the form.
+    fn log_shown(&self) -> bool {
+        self.run.is_some() && !self.run_hidden
     }
 
     fn start_run(
@@ -595,29 +644,50 @@ impl Document {
         resume: Option<launcher_core::engine::runner::Resume>,
         carried: Vec<StepView>,
     ) {
+        // `show-log=#false` keeps the log closed, unless it's open already (then the run goes in
+        // it like any other). A preview or a Retry always shows it.
+        let hidden = !self.log_shown()
+            && !inputs.dry
+            && resume.is_none()
+            && inputs
+                .config
+                .action(&inputs.action)
+                .is_some_and(|a| !a.show_log);
         let log = self.log.get_or_insert_with(TermModel::shared).clone();
         match RunView::start(inputs, resume, carried, log, self.proxy.clone()) {
             Ok(r) => {
                 self.run_error = None;
-                // The window grows to the right for the log, the first time it shows. The form
-                // keeps its width: the window gains the log and the gap before it.
-                if self.run.is_none() {
-                    let (w, h) = self.size;
-                    self.form_width = w - self.margin;
-                    self.request = Some(WindowRequest::Size(
-                        w + self.margin + RUN_PANEL.0,
-                        h.max(RUN_PANEL.1),
-                    ));
+                if !hidden && !self.log_shown() {
+                    self.grow_for_log();
                 }
+                self.run_hidden = hidden;
                 self.run = Some(r);
             }
             Err(e) => self.run_error = Some(e),
         }
     }
 
+    /// The window grows to the right for the log, the first time it shows. The form keeps its
+    /// width: the window gains the log and the gap before it.
+    fn grow_for_log(&mut self) {
+        // The form's width is the window's, which a tool's `width` or the user may have made
+        // wider than the content needs: the form keeps it, rather than shrinking to its least.
+        let (w, h) = if self.window_size.0 > 0.0 {
+            self.window_size
+        } else {
+            self.size
+        };
+        self.form_width = w - self.margin;
+        self.request = Some(WindowRequest::Size(
+            w + self.margin + RUN_PANEL.0,
+            h.max(RUN_PANEL.1),
+        ));
+    }
+
     /// Close the log beside the window (the window fits its form again).
     fn back_to_form(&mut self) {
         self.run = None;
+        self.run_hidden = false;
         self.log = None;
     }
 
@@ -685,7 +755,7 @@ impl Document {
         }
         // A run shows beside the window, on the right: the window stays usable once it ends (its
         // buttons can be pressed again, or another button's steps run).
-        if self.run.is_some() {
+        if self.log_shown() {
             // The window's margin on both sides of the line between them.
             let margin = theme::extras(ui).margin as i8;
             // Resizing the window resizes the log; the form keeps its width until its edge is
@@ -731,6 +801,9 @@ impl Document {
                 .show(ui, |ui| self.run_ui(ui));
         } else {
             self.main_ui(ui);
+            if self.run.is_some() {
+                self.hidden_run(ui.ctx());
+            }
         }
     }
 
@@ -743,7 +816,7 @@ impl Document {
         let margin = theme::extras(ui).margin;
         let corner = ui.max_rect().right_top() + egui::vec2(margin - 2.0, 2.0 - margin);
         let edit_key = ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::E));
-        let shown = self.run.is_none();
+        let shown = !self.log_shown();
         let clicked = shown
             && egui::Area::new(egui::Id::new("edit-button"))
                 .order(egui::Order::Foreground)
@@ -860,6 +933,8 @@ impl Document {
 
         let blocked = self.blocked();
         let mut events = Vec::new();
+        let fill = self.fills_height();
+        let mut table_used = None;
         if let Some(form) = &self.form {
             let mut f = FormUi::new(FormCx {
                 form,
@@ -873,8 +948,10 @@ impl Document {
                 selected: None,
                 numbers: None,
             });
+            f.table_fill = self.table_fill.filter(|_| fill);
             f.show(ui);
             need_w = f.need;
+            table_used = f.table_used;
             events = f.events;
             // Actions no button starts get a button row of their own.
             let config = form.config().clone();
@@ -948,6 +1025,22 @@ impl Document {
             need_w.max(260.0) + 2.0 * margin,
             height.max(40.0) + 2.0 * margin,
         );
+        if !self.log_shown() {
+            let r = ui.max_rect();
+            self.window_size = (r.width() + 2.0 * margin, r.height() + 2.0 * margin);
+        }
+        // The window's height isn't the content's: the first table takes what's left over (or
+        // gives up what's missing) next frame, so the form ends at the window's bottom edge.
+        if !fill {
+            self.table_fill = None;
+        } else if let Some(used) = table_used {
+            let room = ui.max_rect().bottom() - top.y;
+            let want = (used + room - height).max(TABLE_LEAST).round();
+            if self.table_fill.is_none_or(|h| (h - want).abs() > 0.5) {
+                self.table_fill = Some(want);
+                ui.ctx().request_repaint();
+            }
+        }
         for e in events {
             self.on_form_event(e);
         }
@@ -957,7 +1050,51 @@ impl Document {
     fn run_ui(&mut self, ui: &mut egui::Ui) {
         let Some(run) = self.run.as_mut() else { return };
         let request = run.ui(ui);
-        // What the run did to the form.
+        let inputs = run.inputs.clone();
+        self.take_run_changes();
+        match request {
+            Some(RunRequest::Back) => self.back_to_form(),
+            Some(RunRequest::Retry(resume)) => {
+                let carried = self
+                    .run
+                    .as_ref()
+                    .map(|r| r.steps_before(resume.from))
+                    .unwrap_or_default();
+                self.start_run_with(inputs, Some(resume), carried);
+            }
+            None => {}
+        }
+    }
+
+    /// A run without the log (`show-log=#false`). It goes well: it's dropped, leaving the window
+    /// as it was. It fails, or asks something: the log opens after all, to say what happened or
+    /// to ask.
+    fn hidden_run(&mut self, ctx: &egui::Context) {
+        let asking = self.run.as_ref().is_some_and(RunView::asking);
+        match self.take_run_changes() {
+            Some(RunOutcome::Ok | RunOutcome::Stopped) => {
+                self.back_to_form();
+            }
+            Some(RunOutcome::Failed(_) | RunOutcome::Cancelled) => self.show_log(),
+            None if asking => self.show_log(),
+            None => {
+                // Nothing draws the run, so look again soon for how it's going.
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            }
+        }
+    }
+
+    /// A run without the log needs it after all.
+    fn show_log(&mut self) {
+        if self.run_hidden {
+            self.run_hidden = false;
+            self.grow_for_log();
+        }
+    }
+
+    /// What the run did to the form since the last frame, and, once, how it ended.
+    fn take_run_changes(&mut self) -> Option<RunOutcome> {
+        let run = self.run.as_mut()?;
         let edits = run.take_control_edits();
         let choices = run.take_choice_edits();
         let finish = run.take_finish();
@@ -994,7 +1131,11 @@ impl Document {
                     .trim_end_matches(".launcher")
                     .to_string()
             });
-            self.notification = Some((title, body, failed));
+            // A run without the log says nothing when it goes well: showing a file in Explorer
+            // puts Explorer in front, and a "finished" notification would follow.
+            if failed || !self.run_hidden {
+                self.notification = Some((title, body, failed));
+            }
             if let Some((request, code)) =
                 after_run(inputs.config.action(&inputs.action), &outcome, inputs.dry)
             {
@@ -1009,19 +1150,9 @@ impl Document {
             if std::mem::take(&mut self.reload_pending) {
                 self.reload_if_changed();
             }
+            return Some(outcome);
         }
-        match request {
-            Some(RunRequest::Back) => self.back_to_form(),
-            Some(RunRequest::Retry(resume)) => {
-                let carried = self
-                    .run
-                    .as_ref()
-                    .map(|r| r.steps_before(resume.from))
-                    .unwrap_or_default();
-                self.start_run_with(inputs, Some(resume), carried);
-            }
-            None => {}
-        }
+        None
     }
 
     /// Work every table's rows out again (after a run: it may have changed what they show).
@@ -1227,6 +1358,12 @@ fn after_run(
     }
 }
 
+/// A window the user may resize: one with a size of its own (a window that fits its content
+/// doesn't resize).
+fn sizable(w: &WindowSpec) -> bool {
+    w.resizable && (w.width.is_some() || w.height.is_some())
+}
+
 /// Whether some button in the layout starts `action` (a table's row and group buttons too).
 fn has_button(config: &Config, action: &str) -> bool {
     fn walk(config: &Config, items: &[Item], action: &str) -> bool {
@@ -1335,6 +1472,7 @@ mod tests {
             after,
             exit_code,
             lock: None,
+            show_log: true,
             steps: Vec::new(),
             node: Default::default(),
         }

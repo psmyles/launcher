@@ -367,18 +367,18 @@ pub const SPECS: &[Spec] = &[
             p(
                 "width",
                 Ty::Number,
-                "Fixed width (logical px). Without it the window fits its content.",
+                "The window's width (logical px). Without it the window fits its content. With `width` or `height` the user can resize the window (unless resizable=#false): it keeps their size, and opens at it next time.",
             ),
             p(
                 "height",
                 Ty::Number,
-                "Fixed height (logical px). Without it the window fits its content.",
+                "The window's height (logical px). Without it the window fits its content until the user resizes it. A window taller than its content gives the room to its first table.",
             ),
             pd(
                 "resizable",
                 Ty::Bool,
                 "#true",
-                "Let the user resize the window.",
+                "Let the user resize a window that has a `width` or `height` (one that fits its content can't be resized).",
             ),
             pd(
                 "theme",
@@ -474,6 +474,12 @@ pub const SPECS: &[Spec] = &[
                 "lock",
                 Ty::Template,
                 "A file path guarding a shared resource: two runs holding the same lock never overlap, even from different files.",
+            ),
+            pd(
+                "show-log",
+                Ty::Bool,
+                "#true",
+                "Open the log beside the window while the steps run. With #false it opens only if a step fails or asks something: for quick steps such as showing a file.",
             ),
         ],
         children: Children::Steps,

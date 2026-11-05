@@ -1474,6 +1474,7 @@ impl<'a> Ld<'a> {
             // Out of range reads as -1, which validation reports.
             exit_code: Self::p_int(nv, "exit-code").map(|c| i32::try_from(c).unwrap_or(-1)),
             lock: self.p_val(nv, "lock"),
+            show_log: Self::p_bool(nv, "show-log", true),
             steps,
             node: nv.node_ref(),
         })

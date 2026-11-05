@@ -151,13 +151,17 @@ impl App {
                 error: None,
                 wizard: None,
             },
-            Start::Document(p, sets) => Mode::Document(Box::new(Document::open(
-                p,
-                sets,
-                self.state.values.clone(),
-                self.state.choices.clone(),
-                proxy,
-            ))),
+            Start::Document(p, sets) => {
+                let mut d = Document::open(
+                    p,
+                    sets,
+                    self.state.values.clone(),
+                    self.state.choices.clone(),
+                    proxy,
+                );
+                d.set_user_sized(self.state.sized);
+                Mode::Document(Box::new(d))
+            }
             Start::Edit(p) => {
                 let mut d = Document::open(
                     p,
@@ -276,6 +280,16 @@ impl App {
     pub fn set_placement(&mut self, rect: Option<Rect>, maximized: bool) {
         self.state.window = rect;
         self.state.maximized = maximized;
+    }
+
+    /// The user resized or maximized the window. A tool's window keeps their size from then on,
+    /// and opens at it next time.
+    pub fn sized_by_user(&mut self) {
+        if let Mode::Document(d) = &mut self.mode {
+            if d.sized_by_user() {
+                self.state.sized = true;
+            }
+        }
     }
 
     /// Open a file in this window (from the home screen or an open-document event).

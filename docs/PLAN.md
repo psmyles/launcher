@@ -2,9 +2,10 @@
 
 **Status, 5 November 2026:** Asset Check's step 3, Launcher's part, is built: a results table, window
 `--set`, and the window's exit code. All of it is checked on Windows, the hook flow included (see
-*The gate*). Next is Asset Check's step 4, `asset-check.launcher` in the rules repo
-(SandboxVR/exp-content-rules), which uses the syntax below. The features are generic; Asset Check is
-their first user.
+*The gate*). Asset Check's step 4, `asset-check.launcher` in the rules repo
+(SandboxVR/exp-content-rules), uses the syntax below. Trying it in Fork led to five window fixes,
+built on the `asset-check-window` branch (*From step 4's Fork test*). The features are generic;
+Asset Check is their first user.
 
 The 3D Review add-on now runs `3d-review-cli`, 3D Review's console tool, which was renamed from
 `review-cli`.
@@ -123,6 +124,49 @@ steps "commit" when-done="close" exit-code=0 { … }
   - **Don't commit** (a real mouse click): exit 1, and the commit was stopped with the change still
     staged;
   - closing the window: exit 1, and the commit was stopped.
+
+### From step 4's Fork test (5 November 2026)
+
+Built on the `asset-check-window` branch, after the technical artist tried the real window in Fork:
+1. **`steps … show-log=#false`:** the run doesn't open the log beside the window. The log opens
+   only if the run fails, or asks something (a dialog). A run that goes well is dropped, with no
+   "finished" notification: Show in Explorer puts Explorer in front, so one would always follow.
+   A preview or a Retry still shows the log. `Action::show_log`; `Document::hidden_run` and
+   `take_run_changes`, split out of `run_ui`; `RunView::asking`.
+2. **A resizable window keeps the user's size.** `width`/`height` are where the window starts.
+   Before, `fit_size` put the window back to them, and the height back to the content's, every
+   frame, which fought every drag. Now:
+   - `Shell::resized` tells Launcher's own resizes (`ask_size`) from the user's. A resize or maximize
+     by the user calls `App::sized_by_user`, after which `fit_size` stops;
+   - the state file's `window` line keeps `sized=#true`, so the window opens at that size next time;
+   - a window that fits its content still can't be resized, and nothing changes for it.
+3. **A table fills the window's spare height** while the window's height isn't the content's (user
+   sized, a fixed `height`, or the log beside it). The first table's rows take what's left, worked out
+   from the last frame (`Document::table_fill`, `FormUi::table_fill` / `table_used`). They shrink to
+   96 px at least, then scroll.
+4. **The form keeps its width when the log opens.** It used to shrink to its least width, cutting off
+   the table's group headers. `grow_for_log` now uses the window's width as last drawn.
+5. **A hidden item takes no room.** Each item hidden by `visible-if` still left one item gap, so
+   seven hidden fields pushed the form down about 56 px. `FormUi::hidden`.
+
+**Tests:**
+- `state.rs`: `sized` round-trips;
+- `tests/table.rs`: `show-log` reads;
+- `ui/form.rs`: the table fills a given height; hidden items take no room.
+
+**Tried on Windows** with a release build, using `asset-check.launcher` from the rules repo and real
+results files:
+- Show in Explorer selected the file and the window didn't change;
+- Check again re-ran the checks without the log;
+- resizing larger and smaller kept the user's size, and the table filled it or scrolled;
+- maximize filled the screen;
+- a failing Open opened the log beside the full-width form;
+- a resized window reopened at its size; one that wasn't fitted its content again.
+
+**Still to do:**
+- the state file keeps the window's rect as it was last seen, so a window closed while the log
+  shows remembers the wider size. Only a user-sized window reopens at it;
+- nothing for macOS has been tried.
 
 ## Still open
 

@@ -508,6 +508,11 @@ impl RunView {
             .unwrap_or(false)
     }
 
+    /// The run waits on a question for the person running it (`confirm`, `ask`, …).
+    pub fn asking(&self) -> bool {
+        self.state.lock().is_ok_and(|s| s.dialog.is_some())
+    }
+
     /// Stop the run (a dialog it waits on is answered No first).
     pub fn cancel(&self) {
         if let Ok(mut s) = self.state.lock() {
