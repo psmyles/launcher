@@ -4,8 +4,8 @@
 `--set`, and the window's exit code. All of it is checked on Windows, the hook flow included (see
 *The gate*). Asset Check's step 4, `asset-check.launcher` in the rules repo
 (SandboxVR/exp-content-rules), uses the syntax below. Trying it in Fork led to five window fixes,
-built on the `asset-check-window` branch (*From step 4's Fork test*). The features are generic;
-Asset Check is their first user.
+now in `main` (*From step 4's Fork test*). The features are generic; Asset Check is their first
+user.
 
 The 3D Review add-on now runs `3d-review-cli`, 3D Review's console tool, which was renamed from
 `review-cli`.
@@ -127,7 +127,8 @@ steps "commit" when-done="close" exit-code=0 { … }
 
 ### From step 4's Fork test (5 November 2026)
 
-Built on the `asset-check-window` branch, after the technical artist tried the real window in Fork:
+In `main` (from the `asset-check-window` branch), after the technical artist tried the real window
+in Fork:
 1. **`steps … show-log=#false`:** the run doesn't open the log beside the window. The log opens
    only if the run fails, or asks something (a dialog). A run that goes well is dropped, with no
    "finished" notification: Show in Explorer puts Explorer in front, so one would always follow.
