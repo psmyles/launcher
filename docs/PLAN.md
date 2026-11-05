@@ -2,8 +2,9 @@
 
 **Status, 5 November 2026:** Asset Check's step 3, Launcher's part, is built: a results table, window
 `--set`, and the window's exit code. All of it is checked on Windows, the hook flow included (see
-*The gate*). Next is Asset Check's step 4, `asset-check.launcher` in the rules repo, which uses the
-syntax below. The features are generic; Asset Check is their first user.
+*The gate*). Next is Asset Check's step 4, `asset-check.launcher` in the rules repo
+(SandboxVR/exp-content-rules), which uses the syntax below. The features are generic; Asset Check is
+their first user.
 
 The 3D Review add-on now runs `3d-review-cli`, 3D Review's console tool, which was renamed from
 `review-cli`.
@@ -19,9 +20,9 @@ something is wrong, the artist sees it in a **Launcher window**:
 - at the bottom, **Don't commit** and **Commit anyway**, whose choice goes back to the git hook that
   opened the window.
 
-The design is `asset-check-plan.md` in [psmyles/fire-decode](https://github.com/psmyles/fire-decode)
-(private; it moves to the rules repo later). Launcher's part is decision **AC14**, plus AC4 for the exit
-code.
+The design is `docs/asset-check-plan.md` in the rules repo,
+[SandboxVR/exp-content-rules](https://github.com/SandboxVR/exp-content-rules) (private). Launcher's
+part is decision **AC14**, plus AC4 for the exit code.
 
 **Release order:**
 - The add-on now finds only `3d-review-cli`, which first ships in the 3D Review release after 0.8.0.
@@ -196,8 +197,10 @@ What they hold:
 
 ## References
 
-- `asset-check-plan.md` in psmyles/fire-decode: AC4 (the hook flow) and AC14 (these features). On the
-  Windows development machine it's at `D:\Dev\fire-decode\asset-check-plan.md`; the results format is in
-  §3 and the window's layout in §1.
+- `docs/asset-check-plan.md` in SandboxVR/exp-content-rules: AC4 (the hook flow) and AC14 (these
+  features). On the Windows development machine it's at
+  `D:\Dev\exp-content-rules\docs\asset-check-plan.md`; the results format is in §3 and the window's
+  layout in §1.
 - [`docs/LESSONS.md`](LESSONS.md): platform pitfalls.
-- `docs/PLAN.md` in psmyles/asset-rules, psmyles/fire, psmyles/3d-review and psmyles/fire-decode.
+- `docs/PLAN.md` in psmyles/asset-rules, psmyles/fire, psmyles/3d-review, psmyles/fire-decode and
+  SandboxVR/exp-content-rules (step 4).
