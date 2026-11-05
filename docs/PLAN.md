@@ -172,15 +172,16 @@ What they hold:
   - first with a stand-in GUI-subsystem program;
   - then with Launcher's own release build and the stand-in tool: **Don't commit** and closing the
     window stopped the commit, and **Commit anyway** let it through;
-  - then committing from Fork: the window opened with its findings, and closing it stopped the
-    commit. Fork then shows its "Git Error" dialog with the hook's output (Asset Check's AC4 and S1).
+  - then committing from Fork: closing the window stopped the commit, and **Commit anyway** let it
+    through. After a stopped commit Fork shows its "Git Error" dialog with the hook's output (Asset
+    Check's AC4 and S1).
 
   `docs/LESSONS.md` L2.4 now says that Git's `sh` waits, unlike PowerShell and `cmd`.
+- **The window comes to the front over Fork by itself**, so no taskbar flashing is needed. While it
+  waits, Fork shows a "Commit 1 file" progress item with a ✕.
 - **Still open, Asset Check's spike S1, with Fork:**
-  - whether the window comes to the front over Fork by itself. Windows may refuse a process started
-    in the background; if it does, flash the taskbar button, which Launcher already does for
-    finished runs;
-  - what Fork shows while the hook waits;
+  - what Fork's ✕ does while the window is open. If it kills the hook but leaves the window up, the
+    window's buttons no longer reach anything;
   - whether Fork gives up on a hook that waits for minutes.
 
   The scratch repository is `D:\Dev\hook-try\repo`. Its `pre-commit` hook opens the stand-in tool
