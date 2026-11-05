@@ -125,7 +125,6 @@ steps "commit" when-done="close" exit-code=0 { … }
 
 ## Still open
 
-- **Asset Check's spike S1, with Fork itself** (see *Platform*).
 - **To decide: a file Launcher can't load exits 0.** That covers a syntax error, `requires=` a newer
   Launcher, and so on: the window shows the error, and closing it exits 0 (`Document::exit_code`
   falls back to 0 when `state` is an `Err`; checked 5 November 2026). From a git hook, the commit
@@ -185,16 +184,15 @@ What they hold:
     Check's AC4 and S1).
 
   `docs/LESSONS.md` L2.4 now says that Git's `sh` waits, unlike PowerShell and `cmd`.
-- **The window comes to the front over Fork by itself**, so no taskbar flashing is needed. While it
-  waits, Fork shows a "Commit 1 file" progress item with a ✕.
-- **Still open, Asset Check's spike S1, with Fork:**
-  - what Fork's ✕ does while the window is open. If it kills the hook but leaves the window up, the
-    window's buttons no longer reach anything.
+- **Asset Check's spike S1, with Fork, is answered** (5 November 2026):
+  - the window comes to the front over Fork by itself, so no taskbar flashing is needed;
+  - while it waits, Fork shows a "Commit 1 file" progress item, and Fork's Commit button is greyed
+    out;
+  - Fork doesn't give up on a waiting hook: it waited through six minutes with the window open;
+  - the ✕ on Fork's progress item doesn't end the hook. Fork shows "Canceling…" and waits, and the
+    window keeps working until it's closed.
 
-  Fork doesn't give up on a waiting hook: it waited through six minutes with the window open.
-
-  The scratch repository is `D:\Dev\hook-try\repo`. Its `pre-commit` hook opens the stand-in tool
-  (copied to `D:\Dev\hook-try\tool`) with this checkout's release build.
+  Nothing in Launcher needs to change for Fork.
 
 ## References
 
