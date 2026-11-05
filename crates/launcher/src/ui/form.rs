@@ -27,6 +27,8 @@ use launcher_core::config::*;
 use launcher_core::dynval::Dyn;
 use launcher_core::eval::{option_scope, render, Live, OptionItem, Which};
 use launcher_core::form::Form;
+use launcher_core::lua::Snapshot;
+use launcher_core::table::{self, Mark};
 
 use crate::ui::theme;
 
@@ -154,6 +156,8 @@ pub struct FormUi<'a> {
     pub events: Vec<FormEvent>,
     /// Where each item was drawn (for Pick mode and the selection outline).
     rects: Vec<(NodePath, egui::Rect)>,
+    /// Where each table button was drawn: (button id, the row it chooses, rect).
+    pub table_buttons: Vec<(String, String, egui::Rect)>,
 }
 
 /// The Browse button's width.
@@ -184,6 +188,7 @@ impl<'a> FormUi<'a> {
             need: 0.0,
             events: Vec::new(),
             rects: Vec::new(),
+            table_buttons: Vec::new(),
         }
     }
 
@@ -482,6 +487,15 @@ impl<'a> FormUi<'a> {
             Item::Control(i) => {
                 let c = &config.controls[*i];
                 if !self.visible(&c.node, &c.visible_if) {
+                    return;
+                }
+                // A table spans the form, its label above it.
+                if let ControlKind::Choice {
+                    style: ChoiceStyle::Table(t),
+                    ..
+                } = &c.kind
+                {
+                    self.table(ui, c, t, true);
                     return;
                 }
                 ui.horizontal(|ui| self.control(ui, c, Place::Alone));
@@ -854,6 +868,14 @@ impl<'a> FormUi<'a> {
 
     /// The widget; `None` when there's nothing to hover.
     fn widget(&mut self, ui: &mut Ui, c: &Control) -> Option<egui::Response> {
+        // In a row: the label is already in its cell.
+        if let ControlKind::Choice {
+            style: ChoiceStyle::Table(t),
+            ..
+        } = &c.kind
+        {
+            return Some(self.table(ui, c, t, false));
+        }
         let (w, fill) = self.field_width(ui, c);
         let value = self.cx.form.value(&c.id);
         let h = ui.spacing().interact_size.y;
@@ -982,6 +1004,8 @@ impl<'a> FormUi<'a> {
                             }
                             r
                         }
+                        // Drawn before this (`table`).
+                        ChoiceStyle::Table(t) => self.table(ui, c, t, false),
                     }
                 };
                 if computed
@@ -1160,6 +1184,260 @@ impl<'a> FormUi<'a> {
             }
         }
     }
+
+    // ---- tables ---------------------------------------------------------------------------------
+
+    /// A table: its label (unless a row's label cell has it), then its rows in groups, in a frame
+    /// that scrolls past the table's `height`. It keeps its rows on screen while they're worked
+    /// out again after a run.
+    fn table(&mut self, ui: &mut Ui, c: &Control, t: &TableSpec, label: bool) -> egui::Response {
+        let form = self.cx.form;
+        let rows = form.options(&c.id);
+        let failed = match form.results().options.get(&c.id) {
+            Some(Err(e)) => Some(e.clone()),
+            _ => None,
+        };
+        let refreshing = self.cx.refreshing.contains(&c.id);
+        let enabled = self.enabled(c) && !self.cx.locked && !self.cx.pick;
+        let start = ui.cursor().min.x;
+        let width = match c.width {
+            Width::Px(w) => w,
+            _ => ui.available_width(),
+        };
+        let r = ui.vertical(|ui| {
+            ui.set_width(width);
+            let title = c.label.as_deref().filter(|_| label);
+            if title.is_some() || refreshing {
+                ui.horizontal(|ui| {
+                    if let Some(l) = title {
+                        ui.label(RichText::new(l).weak());
+                    }
+                    if refreshing {
+                        ui.add(egui::Spinner::new());
+                    }
+                });
+            }
+            let pad = theme::extras(ui).group_padding as i8;
+            egui::Frame::group(ui.style())
+                .inner_margin(egui::Margin::same(pad))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    if !self.cx.loaded {
+                        ui.horizontal(|ui| {
+                            ui.add(egui::Spinner::new());
+                            ui.label(RichText::new("Loading…").weak());
+                        });
+                    } else if let Some(e) = failed {
+                        ui.label(RichText::new(e).color(ui.visuals().error_fg_color));
+                    } else if rows.is_empty() {
+                        ui.label(RichText::new("Nothing to show").weak());
+                    } else {
+                        egui::ScrollArea::vertical()
+                            .id_salt(("table", &c.id))
+                            .max_height(t.height)
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| self.table_rows(ui, c, t, &rows, enabled));
+                    }
+                });
+        });
+        // Its natural width: what it's given, or the form's field column.
+        match c.width {
+            Width::Px(w) => self.reach(start + w),
+            _ => self.reach(self.field_x + self.field_w),
+        }
+        r.response
+    }
+
+    fn table_rows(
+        &mut self,
+        ui: &mut Ui,
+        c: &Control,
+        t: &TableSpec,
+        rows: &[OptionItem],
+        enabled: bool,
+    ) {
+        for (k, g) in table::groups(rows, t.group_by.as_deref())
+            .iter()
+            .enumerate()
+        {
+            let first = g.rows[0];
+            if k > 0 {
+                ui.separator();
+            }
+            let label = match &t.group_label {
+                None => g.key.clone(),
+                Some(Val::Text(tpl)) => {
+                    render(tpl, &self.row_scope(&rows[first], first), self.cx.env)
+                }
+                Some(Val::Lua(_)) => self.row_text(c, "group-label", first),
+            };
+            let buttons: Vec<&TableButton> = t
+                .buttons
+                .iter()
+                .filter(|b| b.group && self.button_shown(b, first))
+                .collect();
+            if !label.trim().is_empty() || !buttons.is_empty() {
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        for b in buttons.iter().rev() {
+                            self.table_button(ui, c, b, &rows[first], enabled);
+                        }
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            ui.add(egui::Label::new(RichText::new(&label).strong()).truncate());
+                        });
+                    });
+                });
+            }
+            for &i in &g.rows {
+                self.table_row(ui, c, t, &rows[i], i, enabled);
+            }
+        }
+    }
+
+    /// One row: a toggle when it has details, its mark, its title and its buttons; then, when
+    /// open, its details.
+    fn table_row(
+        &mut self,
+        ui: &mut Ui,
+        c: &Control,
+        t: &TableSpec,
+        row: &OptionItem,
+        i: usize,
+        enabled: bool,
+    ) {
+        let title = self.option_text(c, row, i);
+        let details = match &t.details {
+            None => String::new(),
+            Some(Val::Text(tpl)) => render(tpl, &self.row_scope(row, i), self.cx.env),
+            Some(Val::Lua(_)) => self.row_text(c, "details", i),
+        };
+        let mark = t
+            .icon_from
+            .as_deref()
+            .map(|f| Mark::from_word(&table::field(row, f)));
+        let buttons: Vec<&TableButton> = t
+            .buttons
+            .iter()
+            .filter(|b| !b.group && self.button_shown(b, i))
+            .collect();
+        let id = ui.make_persistent_id(("table-row", &c.id, &row.value));
+        let mut state =
+            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, t.open);
+        let opens = !details.trim().is_empty();
+        let header = ui.horizontal(|ui| {
+            if opens {
+                // The toggle takes the indent's width, with no gap after it.
+                let gap = std::mem::replace(&mut ui.spacing_mut().item_spacing.x, 0.0);
+                state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                ui.spacing_mut().item_spacing.x = gap;
+            } else {
+                ui.add_space(ui.spacing().indent);
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                for b in buttons.iter().rev() {
+                    self.table_button(ui, c, b, row, enabled);
+                }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    if let Some(m) = mark {
+                        mark_cell(ui, m);
+                    }
+                    let sense = if opens {
+                        egui::Sense::click()
+                    } else {
+                        egui::Sense::hover()
+                    };
+                    ui.add(egui::Label::new(title).truncate().sense(sense))
+                        .clicked()
+                })
+                .inner
+            })
+            .inner
+        });
+        // A click on the title opens or closes it too.
+        if header.inner {
+            state.toggle(ui);
+        }
+        if opens {
+            state.show_body_indented(&header.response, ui, |ui| {
+                ui.add(egui::Label::new(details).wrap());
+            });
+        }
+    }
+
+    /// A button on a row or group header: it chooses the row, then runs its action.
+    fn table_button(
+        &mut self,
+        ui: &mut Ui,
+        c: &Control,
+        b: &TableButton,
+        row: &OptionItem,
+        enabled: bool,
+    ) {
+        let text = b.label.clone().unwrap_or_else(|| b.id.clone());
+        let blocked = self.cx.blocked;
+        let r = ui.add_enabled(
+            enabled && blocked.is_none(),
+            egui::Button::new(text).small(),
+        );
+        let r = match blocked {
+            Some(why) => r.on_disabled_hover_text(why),
+            None => r,
+        };
+        self.table_buttons
+            .push((b.id.clone(), row.value.clone(), r.rect));
+        if r.clicked() {
+            self.events
+                .push(FormEvent::Set(c.id.clone(), Dyn::str(row.value.clone())));
+            self.events.push(FormEvent::Action(b.action.clone()));
+        }
+    }
+
+    /// Whether a table button shows on row `i`: always, or where its `visible-if` (worked out on
+    /// the evaluation thread) is true. Until it's known, it doesn't.
+    fn button_shown(&self, b: &TableButton, i: usize) -> bool {
+        b.visible_if.is_none()
+            || matches!(
+                self.cx
+                    .live
+                    .conditions
+                    .get(&(b.node.path.clone(), Which::Row(i))),
+                Some(Ok(true))
+            )
+    }
+
+    /// What a row's templates read: its fields as values, and the form's fields.
+    fn row_scope(&self, row: &OptionItem, i: usize) -> Snapshot {
+        let mut s = option_scope(row, i);
+        s.fields = self.cx.form.snapshot().fields.clone();
+        s
+    }
+
+    /// A row's `(lua)` text, as the evaluation thread worked it out ("" until then).
+    fn row_text(&self, c: &Control, prop: &str, i: usize) -> String {
+        self.cx
+            .live
+            .texts
+            .get(&(c.node.path.clone(), table::text_key(prop, i)))
+            .and_then(|r| r.as_ref().ok())
+            .cloned()
+            .unwrap_or_default()
+    }
+}
+
+/// A table row's mark, in a column of its own so titles line up (a row without one leaves it
+/// empty).
+fn mark_cell(ui: &mut Ui, mark: Option<Mark>) {
+    let (glyph, colour) = match mark {
+        Some(Mark::Error) => ("✖", ui.visuals().error_fg_color),
+        Some(Mark::Warning) => ("⚠", ui.visuals().warn_fg_color),
+        Some(Mark::Info) => ("ℹ", theme::extras(ui).info),
+        None => ("", ui.visuals().text_color()),
+    };
+    let size = Vec2::new(
+        theme::extras(ui).status_icon_size,
+        ui.spacing().interact_size.y,
+    );
+    ui.add_sized(size, egui::Label::new(RichText::new(glyph).color(colour)));
 }
 
 /// Controls that are shown (their own `visible-if` and every enclosing one), in form order.
@@ -1245,7 +1523,14 @@ fn label_texts(config: &Config, items: &[Item], f: &mut dyn FnMut(&str)) {
         match it {
             Item::Control(i) => {
                 let c = &config.controls[*i];
-                if matches!(c.kind, ControlKind::Checkbox | ControlKind::Button { .. }) {
+                let table = matches!(
+                    c.kind,
+                    ControlKind::Choice {
+                        style: ChoiceStyle::Table(_),
+                        ..
+                    }
+                );
+                if table || matches!(c.kind, ControlKind::Checkbox | ControlKind::Button { .. }) {
                     continue;
                 }
                 if let Some(l) = &c.label {
@@ -1511,5 +1796,160 @@ mod tests {
                 d.right
             );
         }
+    }
+
+    /// A table tool, its rows worked out, and its Lua results for the form's values (`live`:
+    /// whether the evaluation thread has answered yet).
+    fn table_form(live: bool) -> (Form, Live) {
+        use launcher_core::engine::effects::MockEffects;
+        use launcher_core::eval::Evaluator;
+        let file = load_str(
+            r#"tool "T" format=2
+            window width=600 {
+                table "t" rows=(lua)"{ {title='Old tool'}, {path='a.png', title='A'}, {path='b.fbx', title='B1'}, {path='b.fbx', title='B2'} }" group-by="path" row-label="{title}" {
+                    group-button "reveal" label="Show" show-if="values.path ~= nil"
+                    row-button "explain" label="Explain"
+                }
+            }
+            steps "reveal" { core.wait "w" ms=1; }
+            steps "explain" { core.wait "w" ms=1; }
+            "#,
+            std::path::Path::new("t.launcher"),
+            &LoadOptions::default(),
+        );
+        assert!(file.diags.iter().all(|d| !d.is_error()), "{:?}", file.diags);
+        let config = std::sync::Arc::new(file.config);
+        let mut form = Form::new(
+            config.clone(),
+            LoadResults::default(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        let mut ev = Evaluator::new(
+            (*config).clone(),
+            std::sync::Arc::new(MockEffects::default()),
+            launcher_core::platform::trust::assume(),
+        )
+        .unwrap();
+        form.set_results(ev.load(form.snapshot().clone()));
+        let live = if live {
+            ev.live(form.snapshot())
+        } else {
+            Live::default()
+        };
+        (form, live)
+    }
+
+    /// One frame of the table with these input events: the table buttons drawn, and the form's
+    /// events as text.
+    fn table_frame(
+        ctx: &egui::Context,
+        form: &Form,
+        live: &Live,
+        events: Vec<egui::Event>,
+    ) -> (Vec<(String, String, egui::Rect)>, Vec<String>) {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                Vec2::new(800.0, 600.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        let (env, refreshing) = (BTreeMap::new(), BTreeSet::new());
+        let mut out = None;
+        let mut output = ctx.run_ui(raw, |ui| {
+            let mut f = FormUi::new(FormCx {
+                form,
+                live,
+                env: &env,
+                refreshing: &refreshing,
+                loaded: true,
+                locked: false,
+                blocked: None,
+                pick: false,
+                selected: None,
+                numbers: None,
+            });
+            f.show(ui);
+            let events = f
+                .events
+                .iter()
+                .map(|e| match e {
+                    FormEvent::Set(id, v) => format!("set {id}={}", v.to_text()),
+                    FormEvent::Action(a) => format!("run {a}"),
+                    _ => "other".to_string(),
+                })
+                .collect();
+            out = Some((f.table_buttons, events));
+        });
+        output.textures_delta.clear();
+        out.expect("drawn")
+    }
+
+    /// Click at `at`: move there, press, release (a frame each, as the window gets them).
+    fn click(ctx: &egui::Context, form: &Form, live: &Live, at: egui::Pos2) -> Vec<String> {
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let mut events = Vec::new();
+        for input in [egui::Event::PointerMoved(at), button(true), button(false)] {
+            events.extend(table_frame(ctx, form, live, vec![input]).1);
+        }
+        events
+    }
+
+    #[test]
+    fn a_table_button_chooses_its_row_then_runs_its_action() {
+        let ctx = context();
+        let (form, live) = table_form(true);
+        let (buttons, _) = table_frame(&ctx, &form, &live, Vec::new());
+        let drawn: Vec<(&str, &str)> = buttons
+            .iter()
+            .map(|(b, row, _)| (b.as_str(), row.as_str()))
+            .collect();
+        // Group buttons on each file's first row, not on the group without a path; row buttons on
+        // every row.
+        assert_eq!(
+            drawn,
+            [
+                ("explain", "1"),
+                ("reveal", "2"),
+                ("explain", "2"),
+                ("reveal", "3"),
+                ("explain", "3"),
+                ("explain", "4"),
+            ]
+        );
+        let at = |b: &str, row: &str| {
+            buttons
+                .iter()
+                .find(|(id, r, _)| id == b && r == row)
+                .map(|(_, _, rect)| rect.center())
+                .unwrap()
+        };
+        // The b.fbx group's button chooses its first row; B2's own button chooses B2.
+        assert_eq!(
+            click(&ctx, &form, &live, at("reveal", "3")),
+            ["set t=3", "run reveal"]
+        );
+        assert_eq!(
+            click(&ctx, &form, &live, at("explain", "4")),
+            ["set t=4", "run explain"]
+        );
+    }
+
+    #[test]
+    fn a_table_button_with_a_condition_waits_for_it() {
+        let ctx = context();
+        let (form, live) = table_form(false);
+        let (buttons, _) = table_frame(&ctx, &form, &live, Vec::new());
+        assert!(
+            buttons.iter().all(|(b, _, _)| b == "explain"),
+            "{buttons:?}"
+        );
     }
 }

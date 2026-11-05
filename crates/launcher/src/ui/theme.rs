@@ -38,6 +38,8 @@ pub struct Extras {
     pub accent: Color32,
     /// A step or run that succeeded.
     pub success: Color32,
+    /// A note that is neither a warning nor an error: a table row's info mark.
+    pub info: Color32,
     /// Space between a document's content and the window's edge.
     pub margin: f32,
     /// Space between sections.
@@ -69,6 +71,7 @@ impl Extras {
             } else {
                 Color32::from_rgb(26, 140, 64)
             },
+            info: v.hyperlink_color,
             margin: 16.0,
             gap: 8.0,
             gap_small: 4.0,

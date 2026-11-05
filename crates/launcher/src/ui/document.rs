@@ -17,7 +17,9 @@ use egui::RichText;
 use launcher_core::config::cache::{self, Opened};
 use launcher_core::config::catalog::Os;
 use launcher_core::config::summary::summary;
-use launcher_core::config::{After, Config, ControlKind, Diagnostic, Item, LoadOptions, Val};
+use launcher_core::config::{
+    Action, After, ChoiceStyle, Config, ControlKind, Diagnostic, Item, LoadOptions, Val,
+};
 use launcher_core::dynval::Dyn;
 use launcher_core::engine::effects::RealEffects;
 use launcher_core::engine::runner::RunOutcome;
@@ -94,6 +96,10 @@ pub struct Document {
     form_width: f32,
     /// The visual editor, when open (it replaces the form).
     editor: Option<crate::maker::AnyEditor>,
+    /// `--set id=value` from the command line: the form starts with them (again after a reload).
+    sets: Vec<(String, String)>,
+    /// The exit code a run chose when it closed the window (`exit-code`).
+    exit_code: Option<i32>,
 }
 
 fn options() -> LoadOptions {
@@ -117,6 +123,7 @@ fn run_env() -> BTreeMap<String, String> {
 impl Document {
     pub fn open(
         path: PathBuf,
+        sets: Vec<(String, String)>,
         remembered: BTreeMap<String, Stored>,
         filled: BTreeMap<String, Vec<String>>,
         proxy: EventLoopProxy<AppEvent>,
@@ -159,6 +166,8 @@ impl Document {
             margin: 0.0,
             form_width: 0.0,
             editor: None,
+            sets,
+            exit_code: None,
         };
         d.evaluate();
         d
@@ -204,6 +213,14 @@ impl Document {
             self.env.clone(),
         );
         form.set_filled(self.filled.clone());
+        // The command line's values, before anything is worked out from them.
+        let mut set = Vec::new();
+        for (id, value) in &self.sets {
+            match form.set_for_launch(id, value) {
+                Ok(changed) => set.extend(changed),
+                Err(e) => self.errors.push(format!("--set {e}")),
+            }
+        }
         self.form = Some(form);
         match trust::check(&self.path, &text) {
             Ok(token) => self.start(token),
@@ -215,6 +232,10 @@ impl Document {
                 );
                 self.untrusted = Some(mark);
             }
+        }
+        // Their on-change blocks, as if the user had made them.
+        if self.eval.is_some() && !set.is_empty() {
+            self.changed(set, 0);
         }
     }
 
@@ -451,6 +472,16 @@ impl Document {
         true
     }
 
+    /// The code to exit with: the one a run chose when it closed the window, else the window's
+    /// `close-code`.
+    pub fn exit_code(&self) -> i32 {
+        self.exit_code.unwrap_or_else(|| {
+            self.state
+                .as_ref()
+                .map_or(0, |o| o.loaded.config.window.close_code)
+        })
+    }
+
     /// Stop a run for good (the app is exiting).
     pub fn stop(&mut self) {
         if let Some(r) = &self.run {
@@ -625,7 +656,7 @@ impl Document {
         for ((_, which), r) in &self.live.conditions {
             if let Err(e) = r {
                 let what = match which {
-                    Which::Visible => "visible-if",
+                    Which::Visible | Which::Row(_) => "visible-if",
                     Which::Enabled => "enabled-if",
                 };
                 out.push((format!("{what}: {e}"), true));
@@ -947,11 +978,6 @@ impl Document {
             self.changed(changed, 0);
         }
         if let Some(outcome) = finish {
-            let after = inputs
-                .config
-                .action(&inputs.action)
-                .map(|a| a.after)
-                .unwrap_or(After::Stay);
             let what = self
                 .run
                 .as_ref()
@@ -969,13 +995,16 @@ impl Document {
                     .to_string()
             });
             self.notification = Some((title, body, failed));
-            if outcome == RunOutcome::Ok && !inputs.dry {
-                match after {
-                    After::Exit => self.request = Some(WindowRequest::Close),
-                    After::Minimize => self.request = Some(WindowRequest::Minimize),
-                    After::Stay => {}
+            if let Some((request, code)) =
+                after_run(inputs.config.action(&inputs.action), &outcome, inputs.dry)
+            {
+                self.request = Some(request);
+                if code.is_some() {
+                    self.exit_code = code;
                 }
             }
+            // Tables show what the run changed: their rows are worked out again.
+            self.refresh_tables();
             // The file changed during the run (N11): reload it now it's over.
             if std::mem::take(&mut self.reload_pending) {
                 self.reload_if_changed();
@@ -992,6 +1021,39 @@ impl Document {
                 self.start_run_with(inputs, Some(resume), carried);
             }
             None => {}
+        }
+    }
+
+    /// Work every table's rows out again (after a run: it may have changed what they show).
+    fn refresh_tables(&mut self) {
+        let Some(form) = &self.form else { return };
+        let tables: Vec<String> = form
+            .config()
+            .controls
+            .iter()
+            .filter(|c| {
+                matches!(
+                    &c.kind,
+                    ControlKind::Choice {
+                        style: ChoiceStyle::Table(_),
+                        options_lua: Some(_),
+                        ..
+                    }
+                )
+            })
+            .map(|c| c.id.clone())
+            .collect();
+        if self.eval.is_none() {
+            return;
+        }
+        let snapshot = form.snapshot().clone();
+        for id in tables {
+            if self.refreshing.insert(id.clone()) {
+                self.send(Request::Refresh {
+                    control: id,
+                    snapshot: snapshot.clone(),
+                });
+            }
         }
     }
 
@@ -1147,14 +1209,36 @@ impl Document {
     }
 }
 
-/// Whether some button in the layout starts `action`.
+/// What a finished run does to the window: closes it (with the exit code it chose, 0 unless
+/// it says) or minimizes it. Only a real run that went well does either.
+fn after_run(
+    action: Option<&Action>,
+    outcome: &RunOutcome,
+    dry: bool,
+) -> Option<(WindowRequest, Option<i32>)> {
+    let a = action?;
+    if *outcome != RunOutcome::Ok || dry {
+        return None;
+    }
+    match a.after {
+        After::Exit => Some((WindowRequest::Close, Some(a.exit_code.unwrap_or(0)))),
+        After::Minimize => Some((WindowRequest::Minimize, None)),
+        After::Stay => None,
+    }
+}
+
+/// Whether some button in the layout starts `action` (a table's row and group buttons too).
 fn has_button(config: &Config, action: &str) -> bool {
     fn walk(config: &Config, items: &[Item], action: &str) -> bool {
         items.iter().any(|it| match it {
-            Item::Control(i) => matches!(
-                &config.controls[*i].kind,
-                ControlKind::Button { action: a, .. } if a == action
-            ),
+            Item::Control(i) => match &config.controls[*i].kind {
+                ControlKind::Button { action: a, .. } => a == action,
+                ControlKind::Choice {
+                    style: ChoiceStyle::Table(t),
+                    ..
+                } => t.buttons.iter().any(|b| b.action == action),
+                _ => false,
+            },
             Item::Group { items, .. } | Item::Row { items, .. } => walk(config, items, action),
             Item::Tabs { tabs, .. } => tabs.iter().any(|t| walk(config, &t.items, action)),
             Item::Columns { columns, .. } => columns.iter().any(|c| walk(config, c, action)),
@@ -1237,5 +1321,53 @@ fn ago(t: SystemTime) -> String {
         60..=3599 => format!("{} min ago", secs / 60),
         3600..=86_399 => format!("{} h ago", secs / 3600),
         _ => format!("{} days ago", secs / 86_400),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn action(after: After, exit_code: Option<i32>) -> Action {
+        Action {
+            id: "a".into(),
+            label: None,
+            after,
+            exit_code,
+            lock: None,
+            steps: Vec::new(),
+            node: Default::default(),
+        }
+    }
+
+    #[test]
+    fn a_run_that_closes_the_window_chooses_its_exit_code() {
+        let ok = RunOutcome::Ok;
+        assert_eq!(
+            after_run(Some(&action(After::Exit, Some(1))), &ok, false),
+            Some((WindowRequest::Close, Some(1)))
+        );
+        // Closing without a code of its own: 0, not the window's close-code.
+        assert_eq!(
+            after_run(Some(&action(After::Exit, None)), &ok, false),
+            Some((WindowRequest::Close, Some(0)))
+        );
+        assert_eq!(
+            after_run(Some(&action(After::Minimize, None)), &ok, false),
+            Some((WindowRequest::Minimize, None))
+        );
+        assert_eq!(
+            after_run(Some(&action(After::Stay, None)), &ok, false),
+            None
+        );
+        // A preview, a failed or stopped run, or no action: the window stays as it is.
+        let exit = action(After::Exit, Some(1));
+        assert_eq!(after_run(Some(&exit), &ok, true), None);
+        assert_eq!(
+            after_run(Some(&exit), &RunOutcome::Failed("x".into()), false),
+            None
+        );
+        assert_eq!(after_run(Some(&exit), &RunOutcome::Stopped, false), None);
+        assert_eq!(after_run(None, &ok, false), None);
     }
 }

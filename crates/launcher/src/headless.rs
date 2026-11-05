@@ -14,15 +14,14 @@ use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
 use launcher_core::config::catalog::Os;
-use launcher_core::config::{self, Level, LoadOptions};
+use launcher_core::config::{self, After, Level, LoadOptions};
 use launcher_core::dynval::Dyn;
 use launcher_core::engine::effects::{DryRunEffects, Effects, Mock, MockEffects, RealEffects};
 use launcher_core::engine::runner::{
     self, Resume, RunEvent, RunOutcome, RunSpec, RunUi, StepInfo, StepOutcome,
 };
-use launcher_core::eval::Evaluator;
+use launcher_core::eval::{Evaluator, LoadResults};
 use launcher_core::form::Form;
-use launcher_core::lua::Snapshot;
 use launcher_core::platform::trust;
 
 use crate::cli::{err, out, EXIT_ERRORS, EXIT_OK, EXIT_USAGE};
@@ -52,13 +51,7 @@ pub fn parse(args: &[String]) -> Result<RunArgs, String> {
         };
         match a.as_str() {
             "--action" => r.action = Some(value("--action")?),
-            "--set" => {
-                let v = value("--set")?;
-                let (k, val) = v
-                    .split_once('=')
-                    .ok_or_else(|| format!("--set {v}: write it as id=value"))?;
-                r.sets.push((k.to_string(), val.to_string()));
-            }
+            "--set" => r.sets.push(crate::cli::set_pair(&value("--set")?)?),
             "--answer" => {
                 let v = value("--answer")?;
                 let (k, val) = v.split_once('=').ok_or_else(|| {
@@ -327,7 +320,27 @@ pub fn run(a: &RunArgs) -> i32 {
             return EXIT_ERRORS;
         }
     };
-    let results = ev.load(Snapshot::default());
+    // The form as the window starts it: remembered values, then each --set as if the user made
+    // it. What the file works out when it loads (computed lists, `(lua)` defaults) reads them,
+    // as in the window.
+    let remembered = launcher_core::state::state_path(&path)
+        .map(|p| launcher_core::state::load(&p).values)
+        .unwrap_or_default();
+    let mut form = Form::new(
+        config.clone(),
+        LoadResults::default(),
+        remembered,
+        env.clone(),
+    );
+    let mut problems = Vec::new();
+    let mut set = Vec::new();
+    for (id, text) in &a.sets {
+        match form.set_text(id, text) {
+            Ok(changed) => set.push(changed),
+            Err(e) => problems.push(format!("--set {e}")),
+        }
+    }
+    let results = ev.load(form.snapshot().clone());
     let mut failed_loading = false;
     for e in &results.script_errors {
         err(&format!("error: {}", e.message));
@@ -348,23 +361,14 @@ pub fn run(a: &RunArgs) -> i32 {
     if failed_loading {
         return EXIT_ERRORS;
     }
-    let remembered = launcher_core::state::state_path(&path)
-        .map(|p| launcher_core::state::load(&p).values)
-        .unwrap_or_default();
-    // The form as the window would start it, then each --set as if the user made it.
-    let mut form = Form::new(config.clone(), results, remembered, env.clone());
-    let mut problems = Vec::new();
-    for (id, text) in &a.sets {
-        match form.set_text(id, text) {
-            Ok(changed) => {
-                let ch = launcher_core::form::follow(&mut form, &mut ev, changed);
-                for l in ch.logs {
-                    out(&l);
-                }
-                problems.extend(ch.errors);
-            }
-            Err(e) => problems.push(format!("--set {e}")),
+    form.set_results(results);
+    // The --set values' on-change blocks, in order.
+    for changed in set {
+        let ch = launcher_core::form::follow(&mut form, &mut ev, changed);
+        for l in ch.logs {
+            out(&l);
         }
+        problems.extend(ch.errors);
     }
     problems.extend(form.problems().iter().cloned());
     let snapshot = form.snapshot().clone();
@@ -390,10 +394,15 @@ pub fn run(a: &RunArgs) -> i32 {
             return EXIT_USAGE;
         }
     };
-    if config.action(&action).is_none() {
+    let Some(chosen) = config.action(&action) else {
         err(&format!("error: {shown} has no action `{action}`"));
         return EXIT_USAGE;
-    }
+    };
+    // A run that would close the window exits with the code it chose, as the window would.
+    let exit_code = match chosen.after {
+        After::Exit if !a.dry_run => chosen.exit_code.unwrap_or(EXIT_OK),
+        _ => EXIT_OK,
+    };
     catch_ctrl_c();
     let (tx, rx) = mpsc::channel();
     let color = std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
@@ -458,7 +467,8 @@ pub fn run(a: &RunArgs) -> i32 {
         }
     }
     match outcome {
-        RunOutcome::Ok | RunOutcome::Stopped => EXIT_OK,
+        RunOutcome::Ok => exit_code,
+        RunOutcome::Stopped => EXIT_OK,
         RunOutcome::Failed(m) => {
             err(&format!("the run failed: {m}"));
             EXIT_ERRORS

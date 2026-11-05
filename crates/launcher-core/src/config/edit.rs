@@ -660,6 +660,10 @@ mod tests {
                 "layout {\n    dropdown \"d\" label=\"D\" {\n        option \"x\"\n    }\n}\n",
                 Some(vec![0, 0]),
             ),
+            "row-button" | "group-button" => (
+                "layout {\n    table \"t\" label=\"T\"\n}\n",
+                Some(vec![0, 0]),
+            ),
             "env" => ("action \"a\" {\n    run \"git\"\n}\n", Some(vec![0, 0])),
             "list-from" => (
                 "layout {\n    dropdown \"d\" label=\"D\"\n}\n",

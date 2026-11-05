@@ -59,7 +59,8 @@ pub enum WindowRequest {
 /// How the app was asked to start.
 pub enum Start {
     Home,
-    Document(PathBuf),
+    /// A file, with `--set id=value` pairs to start its form with.
+    Document(PathBuf, Vec<(String, String)>),
     /// A file in the visual editor (`launcher edit FILE`).
     Edit(PathBuf),
     /// One program in a console window (`--console`).
@@ -100,7 +101,9 @@ pub struct App {
 impl App {
     pub fn new(start: Start) -> App {
         let (state_path, about) = match &start {
-            Start::Document(p) | Start::Edit(p) => (state::state_path(p), p.display().to_string()),
+            Start::Document(p, _) | Start::Edit(p) => {
+                (state::state_path(p), p.display().to_string())
+            }
             Start::Gallery => (None, "the gallery".to_string()),
             _ => (state::home_state_path(), "the home screen".to_string()),
         };
@@ -127,7 +130,7 @@ impl App {
         if matches!(self.start, Some(Start::Home)) {
             if let Some(p) = files.next() {
                 launcher_core::log_info!("opened from Finder: {}", p.display());
-                *self = App::new(Start::Document(p));
+                *self = App::new(Start::Document(p, Vec::new()));
             }
         }
         for p in files {
@@ -148,8 +151,9 @@ impl App {
                 error: None,
                 wizard: None,
             },
-            Start::Document(p) => Mode::Document(Box::new(Document::open(
+            Start::Document(p, sets) => Mode::Document(Box::new(Document::open(
                 p,
+                sets,
                 self.state.values.clone(),
                 self.state.choices.clone(),
                 proxy,
@@ -157,6 +161,7 @@ impl App {
             Start::Edit(p) => {
                 let mut d = Document::open(
                     p,
+                    Vec::new(),
                     self.state.values.clone(),
                     self.state.choices.clone(),
                     proxy,
@@ -186,7 +191,7 @@ impl App {
                     d.path.file_stem().unwrap_or_default().to_string_lossy()
                 ),
             },
-            (_, Some(Start::Document(p) | Start::Edit(p))) => format!(
+            (_, Some(Start::Document(p, _) | Start::Edit(p))) => format!(
                 "{} - {name}",
                 p.file_stem().unwrap_or_default().to_string_lossy()
             ),
@@ -238,6 +243,15 @@ impl App {
         }
     }
 
+    /// The code the process exits with once the window has closed: a file's choice (a run's
+    /// `exit-code`, or its window's `close-code`), else 0.
+    pub fn exit_code(&self) -> i32 {
+        match &self.mode {
+            Mode::Document(d) => d.exit_code(),
+            _ => 0,
+        }
+    }
+
     /// Write the state file (window placement and remembered values).
     fn save_state(&mut self) {
         if let Mode::Document(d) = &self.mode {
@@ -280,6 +294,7 @@ impl App {
             .unwrap_or_default();
         self.mode = Mode::Document(Box::new(Document::open(
             p,
+            Vec::new(),
             self.state.values.clone(),
             self.state.choices.clone(),
             proxy,

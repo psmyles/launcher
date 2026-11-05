@@ -903,6 +903,7 @@ pub fn kind_name(word: &str) -> &'static str {
         "folder" => "Folder",
         "display" => "Info",
         "button" => "Button",
+        "table" => "Table",
         "info" => "Text Label",
         "line" => "Line",
         "section" => "Section",

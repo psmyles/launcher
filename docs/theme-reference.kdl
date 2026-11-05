@@ -225,7 +225,7 @@ dark {
         numeric_color_space "GammaByte"
         disabled_alpha 0.5
     }
-    extras accent="#c0deff" success="#66cc80"
+    extras accent="#c0deff" success="#66cc80" info="#5aaaff"
 }
 
 light {
@@ -338,5 +338,5 @@ light {
         numeric_color_space "GammaByte"
         disabled_alpha 0.5
     }
-    extras accent="#00537d" success="#1a8c40"
+    extras accent="#00537d" success="#1a8c40" info="#009bff"
 }

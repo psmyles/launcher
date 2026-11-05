@@ -17,4 +17,5 @@ pub mod recent;
 pub mod replace_file;
 pub mod state;
 pub mod suggest;
+pub mod table;
 pub mod time;

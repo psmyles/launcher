@@ -379,11 +379,22 @@ impl Form {
     /// A change by the user or a `set-control`. Returns the controls whose value changed (this
     /// one and any a preset ties to it), for their on-change blocks.
     pub fn set(&mut self, id: &str, v: Dyn) -> Vec<String> {
+        self.set_value(id, v, true)
+    }
+
+    /// `launcher FILE --set id=text`: the text as the control's kind of value, chosen for this
+    /// launch only. It wins over the remembered value and is not remembered itself.
+    pub fn set_for_launch(&mut self, id: &str, text: &str) -> Result<Vec<String>, String> {
+        let v = self.parse_text(id, text)?;
+        Ok(self.set_value(id, v, false))
+    }
+
+    fn set_value(&mut self, id: &str, v: Dyn, remember: bool) -> Vec<String> {
         let Some(c) = self.config.control(id).filter(|c| c.has_value()) else {
             return Vec::new();
         };
         let v = normalize(c, v);
-        let persist = c.persist;
+        let persist = c.persist && remember;
         match self.preset_want.get(id) {
             Some(want) => {
                 self.overrides.insert(id.to_string(), (want.clone(), v));
@@ -404,13 +415,17 @@ impl Form {
 
     /// `--set id=text`: the text as the control's kind of value.
     pub fn set_text(&mut self, id: &str, text: &str) -> Result<Vec<String>, String> {
+        let v = self.parse_text(id, text)?;
+        Ok(self.set(id, v))
+    }
+
+    fn parse_text(&self, id: &str, text: &str) -> Result<Dyn, String> {
         let c = self
             .config
             .control(id)
             .filter(|c| c.has_value())
             .ok_or_else(|| format!("there is no control `{id}` that holds a value"))?;
-        let v = parse_set(&c.kind, text).map_err(|e| format!("{id}: {e}"))?;
-        Ok(self.set(id, v))
+        parse_set(&c.kind, text).map_err(|e| format!("{id}: {e}"))
     }
 
     /// Back to the default (a `reset` step): the session's and the remembered choice are dropped.

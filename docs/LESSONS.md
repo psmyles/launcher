@@ -28,6 +28,8 @@ Things learned the hard way while building this, each with where it bit. Most ha
   maintain `DC.IdealMaxPos` for a window that is not auto-fitting (`ui/measure.rs`).
 - **L2.4** Shells do not wait for a GUI-subsystem exe, and a pipe they close makes `println!`
   panic. All CLI output goes through non-panicking writes; scripts use `Start-Process -Wait`.
+  That's PowerShell and `cmd`: Git for Windows' `sh` does wait, and passes the exit code on, so a
+  `pre-commit` hook can open the window and read the person's choice.
 - **L2.5** `IcmpSendEcho2` only exists with the `Win32_System_IO` feature (its APC parameter type);
   `IMMDevice::Activate` needs `Win32_System_Com_StructuredStorage` + `Win32_System_Variant`.
 - **L2.6** A WASAPI session enumerator is a snapshot: enumerate again on every poll.
@@ -144,6 +146,9 @@ Things learned the hard way while building this, each with where it bit. Most ha
   posted notification succeeds and shows nothing. Check that before debugging a missing toast.
 - **L4.6** The agent's shell sets `NO_COLOR=1`, and everything started from it inherits it:
   clear it before judging whether a program prints colour in the console.
+- **L4.9** A screenshot script must call `SetProcessDPIAware` first. PowerShell isn't DPI-aware,
+  so on a scaled display `GetWindowRect` gives scaled-down sizes while `PrintWindow` draws real
+  pixels: the image is the window's top-left corner, and the form looks cut off at the right.
 
 ## Linux
 

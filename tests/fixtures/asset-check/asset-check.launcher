@@ -1,0 +1,80 @@
+// A stand-in for Asset Check's window, to try Launcher's results table on real results files.
+// The two files beside it were written by fire-cli and 3d-review-cli (docs/PLAN.md, Test data).
+//
+//     launcher asset-check.launcher --set fire=results-fire-cli.json --set review=results-3d-review-cli.json
+//
+// The window exits 1 on "Don't commit" or when it's closed, and 0 on "Commit anyway", as a git
+// hook would read it. The row and group buttons only log what they were given.
+tool "Asset Check" format=2 requires="0.2"
+
+script #"""
+    -- One row per finding, from both results files. Findings about the whole check come first,
+    -- in a group of their own; then each file's, grouped by its path.
+    function findings()
+        local rows, files = {}, {}
+        for _, results in ipairs({ values.fire, values.review }) do
+            if results ~= "" and exists(results) then
+                local r = json.decode(read_file(results))
+                for _, f in ipairs(r.findings or {}) do
+                    f.path = ""
+                    f.heading = "About this check"
+                    table.insert(rows, f)
+                end
+                for _, file in ipairs(r.files or {}) do
+                    table.insert(files, file)
+                end
+            end
+        end
+        for _, file in ipairs(files) do
+            local checked = "Checked as: " .. (file.profile_label or "(no type matches this name)")
+            if file.stage then
+                checked = checked .. " · " .. file.stage
+            end
+            for _, f in ipairs(file.findings or {}) do
+                f.path = file.path
+                f.heading = file.path .. "    " .. checked
+                table.insert(rows, f)
+            end
+        end
+        for _, f in ipairs(rows) do
+            local lines = { f.what or "" }
+            for _, part in ipairs({ { "Why: ", f.why }, { "How: ", f.how }, { "Note from Tech Art: ", f.note } }) do
+                if part[2] then
+                    table.insert(lines, part[1] .. part[2])
+                end
+            end
+            f.details = table.concat(lines, "\n")
+        end
+        return rows
+    end
+    """#
+
+window close-code=1 width=720 {
+    text "fire" label="fire-cli results" show-if="false"
+    text "review" label="3d-review-cli results" show-if="false"
+    table "findings" rows=(lua)"findings()" row-label="{title}" group-by="path" group-label="{heading}" icon-from="severity" details="{details}" open=#true height=360 {
+        group-button "reveal" label="Show in Explorer" show-if="values.path ~= ''"
+        group-button "open" label="Open" show-if="values.path ~= ''"
+        row-button "explain" label="Explain"
+    }
+    row {
+        button "dont" label="Don't commit - I'll fix these"
+        button "commit" label="Commit anyway"
+    }
+}
+
+steps "reveal" {
+    core.note "said" text="group path={findings.path} rule={findings.rule}"
+}
+steps "open" {
+    core.note "said" text="open path={findings.path}"
+}
+steps "explain" {
+    core.note "said" text="row path={findings.path} rule={findings.rule} severity={findings.severity}"
+}
+steps "dont" when-done="close" exit-code=1 {
+    core.note "said" text="not committing"
+}
+steps "commit" when-done="close" exit-code=0 {
+    core.note "said" text="committing"
+}

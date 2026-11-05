@@ -74,8 +74,18 @@ fn main() {
         launcher_core::log_error!("event loop error: {e}");
     }
     shell.shutdown();
-    if let Some(message) = shell.take_fatal() {
-        fatal(&message);
+    // The file's choice of exit code (a git hook waiting for the window reads it). A window that
+    // couldn't work at all exits with an error.
+    let code = match shell.take_fatal() {
+        Some(message) => {
+            fatal(&message);
+            cli::EXIT_ERRORS
+        }
+        None => shell.exit_code(),
+    };
+    drop(shell);
+    if code != cli::EXIT_OK {
+        std::process::exit(code);
     }
 }
 

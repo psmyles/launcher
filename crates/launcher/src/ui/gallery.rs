@@ -215,6 +215,7 @@ impl Gallery {
             let (v, ex) = (ui.visuals().clone(), theme::extras(ui));
             ui.colored_label(ex.accent, "Accent");
             ui.colored_label(ex.success, "Success");
+            ui.colored_label(ex.info, "Info");
             ui.colored_label(v.warn_fg_color, "Warning");
             ui.colored_label(v.error_fg_color, "Error");
             ui.hyperlink_to("Hyperlink", "https://github.com/emilk/egui");
@@ -434,6 +435,7 @@ impl Gallery {
         let swatches = [
             ("extras.accent", ex.accent),
             ("extras.success", ex.success),
+            ("extras.info", ex.info),
             ("warn_fg_color", v.warn_fg_color),
             ("error_fg_color", v.error_fg_color),
             ("weak text", v.weak_text_color()),

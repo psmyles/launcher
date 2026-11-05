@@ -310,7 +310,7 @@ fn close(child: &mut std::process::Child) {
 /// accepted (a launch that stamps and exits at once); winit's helper window is shown at startup,
 /// long before exit, so it is always still there to be filtered out by class (LESSONS L2.11).
 #[cfg(windows)]
-mod winevent {
+pub(crate) mod winevent {
     use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
     use std::time::{Duration, Instant};
 

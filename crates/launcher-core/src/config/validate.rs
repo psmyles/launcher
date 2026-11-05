@@ -169,6 +169,26 @@ pub fn validate(config: &Config, lines: &LineIndex, diags: &mut Vec<Diagnostic>)
                 );
             }
         }
+        if let ControlKind::Choice {
+            style: ChoiceStyle::Table(t),
+            ..
+        } = &c.kind
+        {
+            for b in &t.buttons {
+                if config.action(&b.action).is_none() {
+                    cx.push(
+                        Severity::Error,
+                        "unknown-action",
+                        format!(
+                            "`{}`'s button `{}` runs `{}`, but there is no such action",
+                            c.id, b.id, b.action
+                        ),
+                        hint(&b.action, actions.iter().copied()),
+                        &b.node,
+                    );
+                }
+            }
+        }
         if c.required && !c.has_value() {
             cx.push(
                 Severity::Warning,
@@ -185,6 +205,47 @@ pub fn validate(config: &Config, lines: &LineIndex, diags: &mut Vec<Diagnostic>)
     }
     for a in &config.actions {
         check_step_refs(&mut cx, config, &a.steps, &valued, &control_ids);
+    }
+
+    // ---- exit codes -------------------------------------------------------------------------------
+    // 0 to 255: what every OS passes on whole.
+    let code_ok = |c: i32| (0..=255).contains(&c);
+    if let Some(n) = &config.window.node {
+        if !code_ok(config.window.close_code) {
+            cx.push(
+                Severity::Error,
+                "bad-exit-code",
+                format!(
+                    "close-code {} isn't an exit code; use 0 to 255",
+                    config.window.close_code
+                ),
+                None,
+                n,
+            );
+        }
+    }
+    for a in &config.actions {
+        let Some(code) = a.exit_code else { continue };
+        if !code_ok(code) {
+            cx.push(
+                Severity::Error,
+                "bad-exit-code",
+                format!("exit-code {code} isn't an exit code; use 0 to 255"),
+                None,
+                &a.node,
+            );
+        } else if a.after != After::Exit {
+            cx.push(
+                Severity::Warning,
+                "exit-code-stays",
+                format!(
+                    "`{}` has an exit-code, but its run doesn't close the window",
+                    a.id
+                ),
+                Some("add after=\"exit\" (in a tool: when-done=\"close\")".into()),
+                &a.node,
+            );
+        }
     }
     for c in &config.controls {
         check_step_refs(&mut cx, config, &c.on_change, &valued, &control_ids);

@@ -1,0 +1,80 @@
+{
+  "schema": "asset-check.results",
+  "version": 1,
+  "tool": {
+    "name": "fire-cli",
+    "version": "0.6.1"
+  },
+  "rules": {
+    "commit": "2c2bfd6",
+    "digest": "sha256:9ba9e789b81fe9997d06063ce22686518891b70305ec23f1956adc9c5863d885"
+  },
+  "context": {
+    "branch": "feature/crates",
+    "mode": "advise"
+  },
+  "findings": [],
+  "files": [
+    {
+      "path": "Assets/Art/Props/ComfyUI_00042_.png",
+      "type": "texture",
+      "profile": null,
+      "profile_label": null,
+      "stage": null,
+      "stage_from": null,
+      "status": "checked",
+      "problem": null,
+      "findings": [
+        {
+          "rule": "file.no_profile",
+          "severity": "warning",
+          "title": "Name doesn't match any texture type",
+          "what": "\"ComfyUI_00042_\" doesn't match the name of any texture type.",
+          "why": "Unity's import presets choose a file's settings by its name, so a file named outside these patterns gets the wrong import settings without anyone noticing.",
+          "how": "Rename the file so its name, without the extension, matches one of these (* stands for any text): T_*_N (Normal map), T_* (Texture).",
+          "note": null,
+          "measured": {
+            "name": "ComfyUI_00042_"
+          },
+          "limit": {
+            "names": [
+              "T_*_N",
+              "T_*"
+            ]
+          },
+          "objects": [],
+          "fix": null
+        }
+      ]
+    },
+    {
+      "path": "Assets/Art/Props/T_Crate_D.png",
+      "type": "texture",
+      "profile": "texture",
+      "profile_label": "Texture",
+      "stage": "prototype",
+      "stage_from": "project",
+      "status": "checked",
+      "problem": null,
+      "findings": [
+        {
+          "rule": "texture.color_profile",
+          "severity": "warning",
+          "title": "Not sRGB",
+          "what": "It has the colour profile \"Display P3\" embedded, not sRGB.",
+          "why": "Unity ignores embedded colour profiles and treats every texture as sRGB, so its colours in the game won't match what you saw in Photoshop.",
+          "how": "Convert it to sRGB: in Photoshop, Edit > Convert to Profile, with the destination sRGB IEC61966-2.1. Then save it again.",
+          "note": null,
+          "measured": {
+            "profile": "Display P3"
+          },
+          "limit": {
+            "profile": "sRGB"
+          },
+          "objects": [],
+          "fix": null
+        }
+      ]
+    }
+  ]
+}

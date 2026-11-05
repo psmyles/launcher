@@ -45,6 +45,10 @@ to the work it's for, and everyone who pulls gets the new version.
 - **Forms:** files, folders, text, numbers, drop-downs and tick boxes. Fields can show, hide or
   turn off based on other fields. Each field remembers its last value. Until something required
   is filled in, the button stays off and says why.
+- **Results tables:** rows a tool's Lua works out (from a checker's JSON report, say), grouped,
+  each with a mark, a title and details to open. Buttons on rows and group headers run steps
+  that read the chosen row's fields, as `{table.field}`. The rows are worked out again after
+  every run.
 - **Steps from add-ons:**
   - Run any program and read its output.
   - Files and folders.
@@ -61,6 +65,11 @@ to the work it's for, and everyone who pulls gets the new version.
   them.
 - **Without the window:** `launcher run FILE --set models=./Mesh` runs a tool from a script or a
   build server. Add `--preview` to see what each step would do without running anything.
+- **From a script, with the window:** `launcher FILE --set ID=VALUE` opens the window with those
+  values in its form, for that launch only. Launcher exits with the code the person chose: a
+  button whose steps close the window (`when-done="close" exit-code=1`), or the window's
+  `close-code` when it's closed without choosing. A git hook can wait for the window and read
+  it.
 - **Safe by default:** a tool's Lua code can't touch files or start programs by itself.
   Everything goes through steps you can see in the console.
 

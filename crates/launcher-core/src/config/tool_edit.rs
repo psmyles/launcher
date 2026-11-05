@@ -115,6 +115,7 @@ pub fn taken_ids(doc: &KdlDocument) -> Vec<String> {
                         | "folder"
                         | "display"
                         | "button"
+                        | "table"
                         | "steps"
                         | "value"
                         | "data"

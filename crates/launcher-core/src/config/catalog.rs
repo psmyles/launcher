@@ -404,6 +404,12 @@ pub const SPECS: &[Spec] = &[
                 "remember",
                 "Open where it was last closed, or centred.",
             ),
+            pd(
+                "close-code",
+                Ty::Int,
+                "0",
+                "The exit code when the window is closed without a run choosing one (its close button, say). A git hook waiting for the window reads it.",
+            ),
         ],
         ..spec("window", Category::Top, "The window.")
     },
@@ -457,6 +463,12 @@ pub const SPECS: &[Spec] = &[
                 Ty::Enum(AFTER),
                 "stay",
                 "After a successful run: keep the window, close it, or minimize it.",
+            ),
+            pd(
+                "exit-code",
+                Ty::Int,
+                "0",
+                "With after=\"exit\": the code Launcher exits with when the run closes the window (`launcher run` too).",
             ),
             p(
                 "lock",
@@ -763,7 +775,91 @@ pub const SPECS: &[Spec] = &[
         common: Common::Control,
         ..spec("button", Category::Control, "Runs an action.")
     },
+    Spec {
+        args: &[ID],
+        props: &[
+            p(
+                "rows",
+                Ty::LuaValue,
+                "`(lua)\"...\"`: the rows, worked out when the file loads and again after every run: a list of tables with any fields. A row's `value` field, if it has one, must be unique; otherwise the row's number is its value.",
+            ),
+            p(
+                "row-label",
+                Ty::Template,
+                "A row's title line, from its fields: {title}. Default: its `label` or `name` field.",
+            ),
+            p(
+                "group-by",
+                Ty::Text,
+                "The field rows are grouped by. Groups keep the order they first appear in.",
+            ),
+            p(
+                "group-label",
+                Ty::Template,
+                "A group header's text, from the group's first row: {path}. Default: the `group-by` field.",
+            ),
+            p(
+                "icon-from",
+                Ty::Text,
+                "The field whose value picks a row's mark: error, warning or info.",
+            ),
+            p(
+                "details",
+                Ty::Template,
+                "Text shown under a row when it's opened, from its fields. Rows with none can't be opened.",
+            ),
+            pd("open", Ty::Bool, "#false", "Rows start opened."),
+            pd(
+                "height",
+                Ty::Number,
+                "320",
+                "The most the rows take (logical px); past that they scroll.",
+            ),
+        ],
+        children: Children::Only(&["row-button", "group-button", "on-change"]),
+        common: Common::Control,
+        has_value: true,
+        ..spec(
+            "table",
+            Category::Control,
+            "Rows in groups, each with a mark, a title and details to open, and buttons on rows and group headers. A button chooses its row (a group button, the group's first row) as the table's value, so its action reads the row's fields as {table.field}. The value is never remembered.",
+        )
+    },
     // ---- control parts ------------------------------------------------------------------------
+    Spec {
+        args: &[ID],
+        props: &[
+            p("label", Ty::Text, "The button's text."),
+            req("action", Ty::ActionRef, "The action to run."),
+            p(
+                "visible-if",
+                Ty::Lua,
+                "Only show the button on rows where this is true. It reads the row's fields: values.path.",
+            ),
+        ],
+        ..spec(
+            "row-button",
+            Category::Part,
+            "A button on each row of a table: it chooses the row, then runs its action.",
+        )
+    },
+    Spec {
+        args: &[ID],
+        props: &[
+            p("label", Ty::Text, "The button's text."),
+            req("action", Ty::ActionRef, "The action to run."),
+            p(
+                "visible-if",
+                Ty::Lua,
+                "Only show the button on groups where this is true. It reads the group's first row's fields: values.path.",
+            ),
+        ],
+        ..spec(
+            "group-button",
+            Category::Part,
+            "A button on each group header of a table: it chooses the group's first row, then runs its action.",
+        )
+    },
     Spec {
         args: &[req(
             "name",

@@ -101,6 +101,11 @@ impl Shell {
         self.fatal.take()
     }
 
+    /// The code the process exits with, once the window has closed.
+    pub fn exit_code(&self) -> i32 {
+        self.app.exit_code()
+    }
+
     /// After the loop returns: flush what must outlive the process.
     pub fn shutdown(&mut self) {
         if std::mem::replace(&mut self.shut_down, true) {

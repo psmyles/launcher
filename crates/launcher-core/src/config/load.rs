@@ -1000,6 +1000,8 @@ impl<'a> Ld<'a> {
             label_width: Self::p_num(nv, "label-width").map_or(d.label_width, |v| v as f32),
             field_width: Self::p_num(nv, "field-width").map_or(d.field_width, |v| v as f32),
             center: Self::p_string(nv, "position").as_deref() == Some("center"),
+            close_code: Self::p_int(nv, "close-code")
+                .map_or(d.close_code, |c| i32::try_from(c).unwrap_or(-1)),
             node: Some(nv.node_ref()),
         }
     }
@@ -1242,6 +1244,7 @@ impl<'a> Ld<'a> {
         let mut options = Vec::new();
         let mut presets = Vec::new();
         let mut list = None;
+        let mut buttons = Vec::new();
         if let Some(kids) = nv.node.children() {
             for (i, k) in kids.nodes().iter().enumerate() {
                 let mut p = nv.path.clone();
@@ -1271,6 +1274,18 @@ impl<'a> Ld<'a> {
                         });
                     }
                     "list-from" => list = self.list_ref(&kv),
+                    "row-button" | "group-button" => {
+                        if let Some(bid) = Self::a_string(&kv, 0) {
+                            buttons.push(TableButton {
+                                id: bid,
+                                label: Self::p_string(&kv, "label"),
+                                action: Self::p_string(&kv, "action").unwrap_or_default(),
+                                group: kv.name() == "group-button",
+                                visible_if: self.p_lua(&kv, "visible-if"),
+                                node: kv.node_ref(),
+                            });
+                        }
+                    }
                     "preset" => {
                         if let Some(value) = self.a_val(&kv, 0) {
                             presets.push(Preset {
@@ -1335,6 +1350,22 @@ impl<'a> Ld<'a> {
                     presets,
                 }
             }
+            "table" => ControlKind::Choice {
+                style: ChoiceStyle::Table(Box::new(TableSpec {
+                    group_by: Self::p_string(nv, "group-by").filter(|s| !s.is_empty()),
+                    group_label: self.p_val(nv, "group-label"),
+                    icon_from: Self::p_string(nv, "icon-from").filter(|s| !s.is_empty()),
+                    details: self.p_val(nv, "details"),
+                    open: Self::p_bool(nv, "open", false),
+                    height: Self::p_num(nv, "height").map_or(320.0, |v| v.max(40.0) as f32),
+                    buttons,
+                })),
+                options,
+                options_lua: self.p_lua(nv, "rows"),
+                list,
+                option_label: self.p_val(nv, "row-label"),
+                presets,
+            },
             "checkbox" => ControlKind::Checkbox,
             "slider" => {
                 let min = Self::p_num(nv, "min").unwrap_or(0.0);
@@ -1412,7 +1443,8 @@ impl<'a> Ld<'a> {
             label: Self::p_string(nv, "label"),
             tooltip: self.p_val(nv, "tooltip"),
             default,
-            persist: Self::p_bool(nv, "persist", true),
+            // A table's choice is the row a button was pressed on: never kept.
+            persist: name != "table" && Self::p_bool(nv, "persist", true),
             visible_if: self.p_lua(nv, "visible-if"),
             enabled_if: self.p_lua(nv, "enabled-if"),
             disabled_tooltip: self.p_val(nv, "disabled-tooltip"),
@@ -1439,6 +1471,8 @@ impl<'a> Ld<'a> {
                 Some("minimize") => After::Minimize,
                 _ => After::Stay,
             },
+            // Out of range reads as -1, which validation reports.
+            exit_code: Self::p_int(nv, "exit-code").map(|c| i32::try_from(c).unwrap_or(-1)),
             lock: self.p_val(nv, "lock"),
             steps,
             node: nv.node_ref(),

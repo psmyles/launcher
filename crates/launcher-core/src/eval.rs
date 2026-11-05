@@ -42,6 +42,8 @@ pub struct LoadResults {
 pub enum Which {
     Visible,
     Enabled,
+    /// A table button's `visible-if` for one row (a group button: the group's first row).
+    Row(usize),
 }
 
 /// Every condition's result, by (node path, which).
@@ -49,7 +51,8 @@ pub type Conditions = BTreeMap<(NodePath, Which), Result<bool, String>>;
 
 /// Every `(lua)` text of the form (titles, notes, tooltips, display texts, presets, option
 /// labels), by (node path, property). A computed option's label is `option-label:<index>` on its
-/// control.
+/// control; a table row's details are `details:<index>`, and a group's label `group-label:<index>`
+/// of its first row.
 pub type Texts = BTreeMap<(NodePath, String), Result<String, String>>;
 
 /// What the form shows that depends on its values and needs Lua: worked out on the evaluation
@@ -327,11 +330,13 @@ impl Evaluator {
         for c in &controls {
             if let ControlKind::Choice {
                 options_lua: Some(src),
+                style,
                 ..
             } = &c.kind
             {
+                let table = matches!(style, ChoiceStyle::Table(_));
                 out.options
-                    .insert(c.id.clone(), self.options_from(src, &snap));
+                    .insert(c.id.clone(), self.options_from(src, &snap, table));
             }
             if let ControlKind::Choice { list: Some(l), .. } = &c.kind {
                 out.options
@@ -368,13 +373,23 @@ impl Evaluator {
         Self::option_items(d?)
     }
 
-    fn options_from(&mut self, src: &LuaSrc, snap: &Snapshot) -> Result<Vec<OptionItem>, String> {
+    /// A computed list: a choice's options, or a table's rows.
+    fn options_from(
+        &mut self,
+        src: &LuaSrc,
+        snap: &Snapshot,
+        table: bool,
+    ) -> Result<Vec<OptionItem>, String> {
         self.vm.set_snapshot(snap.clone());
         let d = self
             .vm
             .eval(src, Some(LOAD_BUDGET))
             .map_err(|e| e.message)?;
-        Self::option_items(d)
+        if table {
+            crate::table::rows_from(d)
+        } else {
+            Self::option_items(d)
+        }
     }
 
     /// A list (from Lua) as options: text, numbers, or tables with a name.
@@ -435,8 +450,9 @@ impl Evaluator {
         let r = match kind {
             Some(ControlKind::Choice {
                 options_lua: Some(s),
+                style,
                 ..
-            }) => self.options_from(&s, snap),
+            }) => self.options_from(&s, snap, matches!(style, ChoiceStyle::Table(_))),
             Some(ControlKind::Choice { list: Some(l), .. }) => self.list_options(&l, snap),
             _ => return Err(format!("`{control}` has no computed options")),
         };
@@ -496,7 +512,76 @@ impl Evaluator {
                 }
             }
         }
+        let mut conditions = conditions;
+        for c in &controls {
+            if let ControlKind::Choice {
+                style: ChoiceStyle::Table(t),
+                ..
+            } = &c.kind
+            {
+                self.table_live(c, t, snap, &mut texts, &mut conditions);
+            }
+        }
         Live { conditions, texts }
+    }
+
+    /// A table's per-row `(lua)`: each row's details, each group's label, and each button's
+    /// `visible-if` on the rows (or groups) it's drawn on. Each reads its row's fields as
+    /// `values.field`, as an option label does.
+    fn table_live(
+        &mut self,
+        c: &Control,
+        t: &TableSpec,
+        snap: &Snapshot,
+        texts: &mut Texts,
+        conditions: &mut Conditions,
+    ) {
+        let rows = crate::form::options(c, &self.last);
+        let groups = crate::table::groups(&rows, t.group_by.as_deref());
+        let firsts: Vec<usize> = groups
+            .iter()
+            .filter_map(|g| g.rows.first().copied())
+            .collect();
+        let scope = |i: usize| {
+            let mut s = option_scope(&rows[i], i);
+            s.fields = snap.fields.clone();
+            s
+        };
+        let mut text = |vm: &mut Vm, prop: &str, src: &LuaSrc, i: usize| {
+            vm.set_snapshot(scope(i));
+            let r = vm
+                .eval(src, Some(LOAD_BUDGET))
+                .map(|d| d.to_text())
+                .map_err(|e| e.message);
+            texts.insert((c.node.path.clone(), crate::table::text_key(prop, i)), r);
+        };
+        if let Some(Val::Lua(src)) = &t.details {
+            for i in 0..rows.len() {
+                text(&mut self.vm, "details", src, i);
+            }
+        }
+        if let Some(Val::Lua(src)) = &t.group_label {
+            for &i in &firsts {
+                text(&mut self.vm, "group-label", src, i);
+            }
+        }
+        for b in &t.buttons {
+            let Some(src) = &b.visible_if else { continue };
+            let on: Vec<usize> = if b.group {
+                firsts.clone()
+            } else {
+                (0..rows.len()).collect()
+            };
+            for i in on {
+                self.vm.set_snapshot(scope(i));
+                let r = self
+                    .vm
+                    .eval(src, Some(LOAD_BUDGET))
+                    .map(|d| d.truthy())
+                    .map_err(|e| e.message);
+                conditions.insert((b.node.path.clone(), Which::Row(i)), r);
+            }
+        }
     }
 
     /// A control's on-change block, for the form's current values. Only instant steps run: `set`

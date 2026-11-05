@@ -29,6 +29,9 @@ pub fn usage() -> String {
 
 Usage:
   launcher [FILE.launcher]            open a file (or the home screen)
+  launcher FILE [--set ID=VALUE]...   open a file with these values in its form, for this
+                                      launch only; the exit code is the file's choice (a
+                                      run's exit-code, or its window's close-code)
   launcher edit FILE                  open a file in the visual editor
   launcher check FILE...              check files for problems (exit code 1 when any has errors)
   launcher run FILE [--action ID] [--set ID=VALUE]... [--preview [--answer STEP=@FILE]...]
@@ -83,12 +86,27 @@ pub fn parse(args: &[String]) -> Result<Mode, String> {
         }
         flag if flag.starts_with("--") => Err(format!("unknown option `{flag}`\n\n{}", usage())),
         file => {
-            if let Some(extra) = it.next() {
-                return Err(format!("unexpected argument `{extra}`\n\n{}", usage()));
+            let mut sets = Vec::new();
+            while let Some(a) = it.next() {
+                match a.as_str() {
+                    "--set" => {
+                        let v = it.next().ok_or("--set needs a value")?;
+                        sets.push(set_pair(v).map_err(|e| format!("{e}\n\n{}", usage()))?);
+                    }
+                    other => return Err(format!("unexpected argument `{other}`\n\n{}", usage())),
+                }
             }
-            Ok(Mode::Gui(Start::Document(PathBuf::from(file))))
+            Ok(Mode::Gui(Start::Document(PathBuf::from(file), sets)))
         }
     }
+}
+
+/// `--set id=value` as (id, value): the first `=` splits them, so the value may hold more.
+pub fn set_pair(arg: &str) -> Result<(String, String), String> {
+    arg.split_once('=')
+        .filter(|(k, _)| !k.trim().is_empty())
+        .map(|(k, v)| (k.trim().to_string(), v.to_string()))
+        .ok_or_else(|| format!("--set {arg}: write it as id=value"))
 }
 
 /// The running Launcher's version, for `requires=`.
@@ -230,8 +248,32 @@ mod tests {
         assert!(parse(&args(&["check"])).is_err());
         assert!(matches!(
             parse(&args(&["x.launcher"])),
-            Ok(Mode::Gui(Start::Document(_)))
+            Ok(Mode::Gui(Start::Document(_, sets))) if sets.is_empty()
         ));
+        // A file with values for its form; a value may hold `=`.
+        match parse(&args(&[
+            "x.launcher",
+            "--set",
+            "results=.git/a b.json",
+            "--set",
+            "context=a=b",
+        ])) {
+            Ok(Mode::Gui(Start::Document(p, sets))) => {
+                assert_eq!(p, PathBuf::from("x.launcher"));
+                assert_eq!(
+                    sets,
+                    [
+                        ("results".to_string(), ".git/a b.json".to_string()),
+                        ("context".to_string(), "a=b".to_string())
+                    ]
+                );
+            }
+            _ => panic!("expected a file with --set values"),
+        }
+        assert!(parse(&args(&["x.launcher", "--set"])).is_err());
+        assert!(parse(&args(&["x.launcher", "--set", "novalue"])).is_err());
+        assert!(parse(&args(&["x.launcher", "--set", "=v"])).is_err());
+        assert!(parse(&args(&["x.launcher", "--nope"])).is_err());
         match parse(&args(&["--console", "git", "clone", "u"])) {
             Ok(Mode::Gui(Start::Console {
                 program,

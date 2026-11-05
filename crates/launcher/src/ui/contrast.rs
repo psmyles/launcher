@@ -133,6 +133,7 @@ mod tests {
             ("error", v.error_fg_color),
             ("link", v.hyperlink_color),
             ("success", look.extras.success),
+            ("info", look.extras.info),
         ];
         let mut pair = |(tn, t): (&str, Color32), (sn, s): (&str, Color32)| {
             let r = ratio(t, s);

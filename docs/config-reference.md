@@ -26,6 +26,7 @@ The window.
 - `label-width` (number, default `140`): Width of the label column (logical px).
 - `field-width` (number, default `260`): Width of the field column while the window fits its content (logical px).
 - `position` (word: remember | center, default `remember`): Open where it was last closed, or centred.
+- `close-code` (integer, default `0`): The exit code when the window is closed without a run choosing one (its close button, say). A git hook waiting for the window reads it.
 
 ### `script`
 
@@ -61,6 +62,7 @@ Steps a button (or `launcher run --action`) carries out, in order.
 - argument `id` (name, required): The name other parts of the file refer to.
 - `label` (text): The name shown for the action.
 - `after` (word: stay | exit | minimize, default `stay`): After a successful run: keep the window, close it, or minimize it.
+- `exit-code` (integer, default `0`): With after="exit": the code Launcher exits with when the run closes the window (`launcher run` too).
 - `lock` (template): A file path guarding a shared resource: two runs holding the same lock never overlap, even from different files.
 - block: steps
 
@@ -322,6 +324,30 @@ Runs an action.
 - `disabled-tooltip` (template): Shown when hovering the control while it is greyed out.
 - `required` (#true|#false, default `#false`): Actions can't run while the control is empty; the Run button says why.
 - `width` (width): Field width: "fill" (to the form's right edge), "auto", or a number of logical pixels.
+
+### `table`
+
+Rows in groups, each with a mark, a title and details to open, and buttons on rows and group headers. A button chooses its row (a group button, the group's first row) as the table's value, so its action reads the row's fields as {table.field}. The value is never remembered.
+
+- argument `id` (name, required): The name other parts of the file refer to.
+- `rows` ((lua) expression): `(lua)"..."`: the rows, worked out when the file loads and again after every run: a list of tables with any fields. A row's `value` field, if it has one, must be unique; otherwise the row's number is its value.
+- `row-label` (template): A row's title line, from its fields: {title}. Default: its `label` or `name` field.
+- `group-by` (text): The field rows are grouped by. Groups keep the order they first appear in.
+- `group-label` (template): A group header's text, from the group's first row: {path}. Default: the `group-by` field.
+- `icon-from` (text): The field whose value picks a row's mark: error, warning or info.
+- `details` (template): Text shown under a row when it's opened, from its fields. Rows with none can't be opened.
+- `open` (#true|#false, default `#false`): Rows start opened.
+- `height` (number, default `320`): The most the rows take (logical px); past that they scroll.
+- `label` (text): Text in the label column.
+- `tooltip` (template): Shown when hovering the control.
+- `default` (value): The value before the user changes it. `(lua)"..."` works it out when the file loads.
+- `persist` (#true|#false, default `#true`): Remember the value between launches.
+- `visible-if` (Lua expression): Only show the control when this is true.
+- `enabled-if` (Lua expression): Grey the control out unless this is true.
+- `disabled-tooltip` (template): Shown when hovering the control while it is greyed out.
+- `required` (#true|#false, default `#false`): Actions can't run while the control is empty; the Run button says why.
+- `width` (width): Field width: "fill" (to the form's right edge), "auto", or a number of logical pixels.
+- block: `row-button`, `group-button`, `on-change`
 
 ## Steps
 
@@ -759,6 +785,24 @@ One tab page.
 One column.
 
 - block: layout items and controls
+
+### `row-button`
+
+A button on each row of a table: it chooses the row, then runs its action.
+
+- argument `id` (name, required): The name other parts of the file refer to.
+- `label` (text): The button's text.
+- `action` (action id, required): The action to run.
+- `visible-if` (Lua expression): Only show the button on rows where this is true. It reads the row's fields: values.path.
+
+### `group-button`
+
+A button on each group header of a table: it chooses the group's first row, then runs its action.
+
+- argument `id` (name, required): The name other parts of the file refer to.
+- `label` (text): The button's text.
+- `action` (action id, required): The action to run.
+- `visible-if` (Lua expression): Only show the button on groups where this is true. It reads the group's first row's fields: values.path.
 
 ### `option`
 

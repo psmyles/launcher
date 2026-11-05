@@ -8,6 +8,10 @@
 //! * the per-file lock blocks a second run of the same file, not of a different one;
 //! * a dry run lists the commands and starts nothing;
 //! * env-from carries a setup script's variables into later steps.
+//! * a results table: rows from two real results files (fire-cli's and 3d-review-cli's) reach a
+//!   step as the row a group button and a row button choose;
+//! * a run that closes the window exits with the code it chose, and closing the window (Windows)
+//!   exits with the tool's close-code.
 //!
 //! (Retry resuming at the failed step is covered by the runner's unit tests.)
 
@@ -351,6 +355,127 @@ fn case_exit_codes(e: &Env) -> Result<(), String> {
     )
 }
 
+/// The Asset Check stand-in (`tests/fixtures/asset-check`), with both results files set.
+fn asset_check(e: &Env, extra: &[&str]) -> Output {
+    let dir = util::root()
+        .join("tests")
+        .join("fixtures")
+        .join("asset-check");
+    let fire = format!("fire={}", dir.join("results-fire-cli.json").display());
+    let review = format!(
+        "review={}",
+        dir.join("results-3d-review-cli.json").display()
+    );
+    let mut args = vec!["--set", &fire, "--set", &review];
+    args.extend_from_slice(extra);
+    e.run(&dir.join("asset-check.launcher"), &args)
+}
+
+fn case_table_rows(e: &Env) -> Result<(), String> {
+    // Row 1 is the run-level finding; the model's group (rows 4 and 5) comes last.
+    for (row, action, want) in [
+        (
+            "4",
+            "reveal",
+            "group path=Assets/Art/Props/SM_Crate.fbx rule=geometry.hard_edges",
+        ),
+        (
+            "5",
+            "explain",
+            "row path=Assets/Art/Props/SM_Crate.fbx rule=density.texel severity=info",
+        ),
+        ("1", "reveal", "group path= rule=tool.too_old"),
+        (
+            "3",
+            "explain",
+            "row path=Assets/Art/Props/T_Crate_D.png rule=texture.color_profile severity=warning",
+        ),
+    ] {
+        let set = format!("findings={row}");
+        let o = asset_check(e, &["--set", &set, "--action", action]);
+        let t = text(&o);
+        check(
+            o.status.success(),
+            format!(
+                "{action} on row {row} failed:
+{t}"
+            ),
+        )?;
+        check(
+            t.contains(want),
+            format!(
+                "{action} on row {row}: no `{want}` in:
+{t}"
+            ),
+        )?;
+    }
+    Ok(())
+}
+
+fn case_run_exit_codes(e: &Env) -> Result<(), String> {
+    for (action, want) in [("dont", 1), ("commit", 0)] {
+        let o = asset_check(e, &["--action", action]);
+        check(
+            o.status.code() == Some(want),
+            format!(
+                "{action}: expected exit code {want}, got {:?}:
+{}",
+                o.status.code(),
+                text(&o)
+            ),
+        )?;
+    }
+    Ok(())
+}
+
+/// The window itself: open it with --set, close it as its close button would (WM_CLOSE), and
+/// read the exit code (Windows: elsewhere a closed window can't be asked to close this way).
+fn case_window_close_code(e: &Env) -> Result<(), String> {
+    #[cfg(not(windows))]
+    {
+        let _ = e;
+        eprintln!("        (skipped: Windows only)");
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        let dir = util::root()
+            .join("tests")
+            .join("fixtures")
+            .join("asset-check");
+        let mut child = Command::new(&e.launcher)
+            .arg(dir.join("asset-check.launcher"))
+            .arg("--set")
+            .arg(format!(
+                "fire={}",
+                dir.join("results-fire-cli.json").display()
+            ))
+            .env("LAUNCHER_DATA_DIR", e.dir.join("data"))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|x| x.to_string())?;
+        let start = Instant::now();
+        // Until the window shows, there is nothing to close.
+        let status = loop {
+            if let Some(s) = child.try_wait().map_err(|x| x.to_string())? {
+                break s;
+            }
+            if start.elapsed() > Duration::from_secs(30) {
+                let _ = child.kill();
+                return Err("the window didn't close".into());
+            }
+            crate::ttfp::winevent::close_windows_of(child.id());
+            std::thread::sleep(Duration::from_millis(200));
+        };
+        check(
+            status.code() == Some(1),
+            format!("expected the close-code 1, got {:?}", status.code()),
+        )
+    }
+}
+
 pub fn run_e2e(_args: &[String]) -> Result<(), String> {
     step("build (debug: launcher, argdump)");
     run(cargo().args(["build", "-p", "launcher", "-p", "argdump"]))?;
@@ -392,6 +517,18 @@ pub fn run_e2e(_args: &[String]) -> Result<(), String> {
         ("dry run", case_dry_run),
         ("env-from", case_env_from),
         ("exit codes", case_exit_codes),
+        (
+            "a results table's rows reach its buttons' steps",
+            case_table_rows,
+        ),
+        (
+            "a run that closes the window picks the exit code",
+            case_run_exit_codes,
+        ),
+        (
+            "closing the window exits with its close-code",
+            case_window_close_code,
+        ),
     ];
     step("end-to-end");
     let mut failed = 0;

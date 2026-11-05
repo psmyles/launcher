@@ -127,6 +127,22 @@ const ITEMS: &[Item] = &[
         children: &["option", "on-change", "list-from"],
     },
     Item {
+        word: "table",
+        v1: "table",
+        first_arg: true,
+        props: &[
+            ("rows", "rows"),
+            ("row-label", "row-label"),
+            ("group-by", "group-by"),
+            ("group-label", "group-label"),
+            ("icon-from", "icon-from"),
+            ("details", "details"),
+            ("open", "open"),
+            ("height", "height"),
+        ],
+        children: &["row-button", "group-button", "on-change"],
+    },
+    Item {
         word: "tick-box",
         v1: "checkbox",
         first_arg: true,
@@ -212,6 +228,7 @@ fn control_kind(word: &str) -> &'static str {
         "file" => "a file",
         "folder" => "a folder",
         "button" => "a button",
+        "table" => "a table",
         _ => "something to show",
     }
 }
@@ -229,8 +246,12 @@ fn is_control(word: &str) -> bool {
             | "folder"
             | "display"
             | "button"
+            | "table"
     )
 }
+
+/// A table's buttons, as (word, the properties it takes).
+const TABLE_BUTTON_PROPS: &[(&str, &str)] = &[("label", "label"), ("show-if", "visible-if")];
 
 const TOP: &[&str] = &[
     "tool", "window", "steps", "value", "data", "script", "add-on", "example",
@@ -243,9 +264,14 @@ const WINDOW_PROPS: &[&str] = &[
     "label-width",
     "field-width",
     "position",
+    "close-code",
 ];
-const STEPS_PROPS: &[(&str, &str)] =
-    &[("when-done", "after"), ("lock", "lock"), ("label", "label")];
+const STEPS_PROPS: &[(&str, &str)] = &[
+    ("when-done", "after"),
+    ("exit-code", "exit-code"),
+    ("lock", "lock"),
+    ("label", "label"),
+];
 const STEP_PROPS: &[(&str, &str)] = &[
     ("label", "label"),
     ("if-wrong", "on-error"),
@@ -345,12 +371,17 @@ fn window_buttons(doc: &KdlDocument) -> Vec<(String, String)> {
                         walk(c, out);
                     }
                 }
-                "button" => {
+                "button" | "row-button" | "group-button" => {
                     if let (Some(id), Some(l)) = (
                         first_string(n),
                         n.entry("label").and_then(|e| e.value().as_string()),
                     ) {
                         out.push((id, l.to_string()));
+                    }
+                }
+                "table" => {
+                    if let Some(c) = n.children() {
+                        walk(c, out);
                     }
                 }
                 _ => {}
@@ -746,9 +777,11 @@ impl Tx<'_> {
         }
         out.nodes_mut().push(w);
         // A tool with steps but no button gets a Start button.
-        let has_button = layout
-            .children()
-            .is_some_and(|d| contains_kind(d, "button"));
+        let has_button = layout.children().is_some_and(|d| {
+            ["button", "row-button", "group-button"]
+                .iter()
+                .any(|k| contains_kind(d, k))
+        });
         if !has_button {
             if let Some(id) = self.steps_ids.first().cloned() {
                 let mut b = KdlNode::new("button");
@@ -896,6 +929,11 @@ impl Tx<'_> {
                 }
                 match cw {
                     "list-from" => kids.nodes_mut().push(self.with_node(c, "list-from")),
+                    "row-button" | "group-button" => {
+                        if let Some(b) = self.table_button(c) {
+                            kids.nodes_mut().push(b);
+                        }
+                    }
                     "on-change" => {
                         let mut oc = KdlNode::new("on-change");
                         oc.set_span(c.span());
@@ -910,6 +948,50 @@ impl Tx<'_> {
         if !kids.nodes().is_empty() {
             t.set_children(kids);
         }
+        Some(t)
+    }
+
+    /// A table's `row-button` or `group-button`: like a window button, its name is the `steps`
+    /// block it runs.
+    fn table_button(&mut self, n: &KdlNode) -> Option<KdlNode> {
+        let word = n.name().value();
+        let Some(id) = first_string(n) else {
+            self.error(
+                "missing-name",
+                format!("`{word}` needs a name, like `{word} \"…\"`"),
+                None,
+                Self::node_span(n),
+            );
+            return None;
+        };
+        let mut t = KdlNode::new(word);
+        t.set_span(n.span());
+        if let Some(a) = args(n).first() {
+            t.push(positional(a));
+        }
+        let allowed: Vec<&str> = TABLE_BUTTON_PROPS.iter().map(|(w, _)| *w).collect();
+        for (k, e) in props(n) {
+            match TABLE_BUTTON_PROPS.iter().find(|(w, _)| *w == k) {
+                Some((_, v)) => t.push(renamed(e, v)),
+                None => self.unknown_prop(e, word, &allowed),
+            }
+        }
+        if let Some(c) = children(n).next() {
+            self.unknown_node(c, &format!("in a `{word}`"), &[]);
+        }
+        if !self.steps_ids.contains(&id) {
+            let help = did_you_mean(&id, self.steps_ids.iter().map(String::as_str))
+                .map(|m| format!("did you mean `{m}`?"))
+                .or_else(|| Some(format!("add `steps \"{id}\" {{ }}` for it")));
+            self.error(
+                "button-without-steps",
+                format!("The button \"{id}\" has no steps"),
+                help,
+                Self::node_span(n),
+            );
+            return None;
+        }
+        t.push(KdlEntry::new_prop("action", id));
         Some(t)
     }
 

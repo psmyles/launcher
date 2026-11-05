@@ -189,6 +189,9 @@ pub struct WindowSpec {
     pub label_width: f32,
     pub field_width: f32,
     pub center: bool,
+    /// The exit code when the window is closed without a run choosing one (`close-code`): the
+    /// title bar's close button, say.
+    pub close_code: i32,
     pub node: Option<NodeRef>,
 }
 
@@ -203,6 +206,7 @@ impl Default for WindowSpec {
             label_width: 140.0,
             field_width: 260.0,
             center: false,
+            close_code: 0,
             node: None,
         }
     }
@@ -338,11 +342,48 @@ impl Control {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ChoiceStyle {
     Dropdown,
-    Radio { horizontal: bool },
+    Radio {
+        horizontal: bool,
+    },
     Checklist,
+    /// Rows in groups, with buttons on rows and group headers (`table`).
+    Table(Box<TableSpec>),
+}
+
+/// How a `table` shows its rows. Each row is one of the control's options: a table of fields
+/// from `rows=(lua)`, read as `{control.field}` once a button has chosen it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TableSpec {
+    /// The field rows are grouped by, in the order the groups first appear; none: one group.
+    pub group_by: Option<String>,
+    /// A group header's text, worked out from its first row (default: the `group-by` field).
+    pub group_label: Option<Val>,
+    /// The field whose value picks a row's mark: error, warning or info.
+    pub icon_from: Option<String>,
+    /// A row's details, shown when it's opened (rows without any can't be opened).
+    pub details: Option<Val>,
+    /// Rows start opened.
+    pub open: bool,
+    /// The most the rows take before they scroll (logical px).
+    pub height: f32,
+    pub buttons: Vec<TableButton>,
+}
+
+/// A button on each row, or on each group header (`row-button`, `group-button`). Pressing it
+/// chooses the row (a group's first row) as the table's value, then runs its action.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TableButton {
+    pub id: String,
+    pub label: Option<String>,
+    pub action: String,
+    /// On group headers rather than rows.
+    pub group: bool,
+    /// Shown only where this is true; it reads the row's fields as `values.field`.
+    pub visible_if: Option<LuaSrc>,
+    pub node: NodeRef,
 }
 
 #[derive(Clone, Debug)]
@@ -424,6 +465,7 @@ impl ControlKind {
                 ChoiceStyle::Dropdown => "dropdown",
                 ChoiceStyle::Radio { .. } => "radio",
                 ChoiceStyle::Checklist => "checklist",
+                ChoiceStyle::Table(_) => "table",
             },
             ControlKind::Checkbox => "checkbox",
             ControlKind::Slider { .. } => "slider",
@@ -449,6 +491,9 @@ pub struct Action {
     pub id: String,
     pub label: Option<String>,
     pub after: After,
+    /// With `after="exit"`: the code Launcher exits with once the run closes the window
+    /// (`exit-code`; 0 when not given).
+    pub exit_code: Option<i32>,
     pub lock: Option<Val>,
     pub steps: Vec<Step>,
     pub node: NodeRef,
