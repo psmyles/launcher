@@ -126,6 +126,14 @@ steps "commit" when-done="close" exit-code=0 { … }
 ## Still open
 
 - **Asset Check's spike S1, with Fork itself** (see *Platform*).
+- **To decide: a file Launcher can't load exits 0.** That covers a syntax error, `requires=` a newer
+  Launcher, and so on: the window shows the error, and closing it exits 0 (`Document::exit_code`
+  falls back to 0 when `state` is an `Err`; checked 5 November 2026). From a git hook, the commit
+  then goes through.
+  - Asset Check's hook guards against this on its own side, by checking `launcher --version` first
+    (its AC16).
+  - A distinct code, such as 2 for "couldn't load the file", would let a hook tell this from the
+    person's choice. Then it could report the problem, rather than guess.
 - **`crates/launcher/tests/cli.rs` `version_and_help` fails.** `product.json` says 0.2.1 (since
   `efc42e5`, before this work) but the workspace `Cargo.toml` still says 0.2.0, and the test looks
   for Cargo's version in `--version`. Bring the two into line at the release bump.
