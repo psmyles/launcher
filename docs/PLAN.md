@@ -1,14 +1,20 @@
 # Launcher - Work Plan
 
-**Status, November 2026:** the 3D Review add-on now runs `3d-review-cli`, 3D Review's console tool,
-which was renamed from `review-cli`. The features below haven't started. They're generic, and Asset
-Check needs them.
+**Status, 5 November 2026:** the features below haven't started, and they are Asset Check's next step
+(step 3). The steps before it are done: `asset-rules` `v0.1.0`, and both checkers, `fire-cli` and
+`3d-review-cli`, write real results files to build against. The features are generic; Asset Check is
+their first user.
+
+The 3D Review add-on now runs `3d-review-cli`, 3D Review's console tool, which was renamed from
+`review-cli`.
 
 ## Context
 
 **Asset Check** checks art assets committed to a Unity project against a technical artist's rules. When
 something is wrong, the artist sees it in a **Launcher window**:
 - one group per file, one row per problem, with what / why / how;
+- first, a group for problems that concern the whole check rather than one file, such as "Update
+  3D Review to version 0.9.0 or later";
 - **Show in Explorer** / **Open** buttons on each file;
 - at the bottom, **Don't commit** and **Commit anyway**, whose choice goes back to the git hook that
   opened the window.
@@ -23,13 +29,23 @@ Review isn't installed… or it is too old".
 
 ## Queue
 
-Line numbers are approximate. They were read from a working tree that had other edits in
+Line numbers are approximate. They were read before the tab-wrapping fix (357523b) changed
 `crates/launcher/src/ui/form.rs` and `ui/theme.rs`.
 
 1. **A results table control.**
-   - **Rows** come from data known only at run time: a JSON file whose path is a form value. Reuse what
+   - **Rows** come from data known only at run time: JSON files whose paths are form values. Reuse what
      computed choices already do: rows are option tables with any fields, read as `{control.field}`.
+   - **More than one file, shown as one table.** Asset Check has two, one per checker:
+     `.git/asset-check/results-fire-cli.json` and `results-3d-review-cli.json`. Each lists only its
+     own tool's files.
    - **Rows can be grouped by a field.** For Asset Check: one group per file, one row per finding.
+   - **Rows can also come from a list outside the groups, shown first in a group of their own.** In
+     Asset Check's results that is the top-level `findings` list, for problems with the whole check,
+     today `tool.too_old`.
+   - **The format:** `asset-check.results` v1, sketched in `asset-check-plan.md` §3 and defined by
+     asset-rules' `results` module. For test fixtures, use real files: `fire-cli check … --results`
+     and `3d-review-cli audit … --results`. A `3d-review-cli` that says 0.8.0, run against
+     asset-rules' fixture `rules.json` (which requires 0.9.0), produces a top-level finding.
    - **Each row** has a severity icon, a title line, and expandable detail text.
    - **Rows can carry buttons** bound to steps. A row button sets the control's value to that row and
      then presses its button, so the step sees the clicked row's fields with no engine change.
@@ -67,8 +83,11 @@ Line numbers are approximate. They were read from a working tree that had other 
    a sample results file, presses a row button and checks the row's fields reached the step; and one that
    ends the window with a code.
 
-*Done when* Asset Check step 3's gate passes: a sample results file renders correctly, row buttons see
-their row's fields, and the hook reads the chosen exit code.
+*Done when* Asset Check step 3's gate passes:
+- a pair of real results files (one from each checker, one with a top-level finding) renders correctly
+  as one table;
+- row buttons see their row's fields;
+- the hook reads the chosen exit code.
 
 ## Working on the Mac
 
