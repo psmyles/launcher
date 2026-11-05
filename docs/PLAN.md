@@ -181,8 +181,9 @@ What they hold:
   waits, Fork shows a "Commit 1 file" progress item with a ✕.
 - **Still open, Asset Check's spike S1, with Fork:**
   - what Fork's ✕ does while the window is open. If it kills the hook but leaves the window up, the
-    window's buttons no longer reach anything;
-  - whether Fork gives up on a hook that waits for minutes.
+    window's buttons no longer reach anything.
+
+  Fork doesn't give up on a waiting hook: it waited through six minutes with the window open.
 
   The scratch repository is `D:\Dev\hook-try\repo`. Its `pre-commit` hook opens the stand-in tool
   (copied to `D:\Dev\hook-try\tool`) with this checkout's release build.
