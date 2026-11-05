@@ -35,7 +35,7 @@ fn examples() -> PathBuf {
 fn version_and_help() {
     let (code, out, _) = run(&["--version"]);
     assert_eq!(code, 0);
-    assert!(out.contains(env!("CARGO_PKG_VERSION")), "{out}");
+    assert!(out.contains(env!("LAUNCHER_VERSION")), "{out}");
     let (code, out, _) = run(&["--help"]);
     assert_eq!(code, 0);
     assert!(out.contains("launcher check FILE"), "{out}");

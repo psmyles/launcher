@@ -29,7 +29,7 @@ part is decision **AC14**, plus AC4 for the exit code.
 - The add-on now finds only `3d-review-cli`, which first ships in the 3D Review release after 0.8.0.
   Release Launcher after that 3D Review release; otherwise 3D Review 0.8.0 users get "3D Review isn't
   installed… or it is too old".
-- **The version is 0.3.0** (`product.json` and the workspace `Cargo.toml`), what
+- **The version is 0.3.0** (`product.json`, the only place it's set), what
   `asset-check.launcher` requires: an older Launcher doesn't know `table` or `show-log`.
 
 ## What step 4 writes

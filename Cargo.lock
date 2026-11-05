@@ -130,7 +130,7 @@ dependencies = [
 
 [[package]]
 name = "argdump"
-version = "0.3.0"
+version = "0.0.0"
 
 [[package]]
 name = "arrayref"
@@ -1292,7 +1292,7 @@ dependencies = [
 
 [[package]]
 name = "launcher"
-version = "0.3.0"
+version = "0.0.0"
 dependencies = [
  "alacritty_terminal",
  "egui",
@@ -1319,7 +1319,7 @@ dependencies = [
 
 [[package]]
 name = "launcher-core"
-version = "0.3.0"
+version = "0.0.0"
 dependencies = [
  "full_moon",
  "kdl",
@@ -2717,7 +2717,7 @@ dependencies = [
 
 [[package]]
 name = "sokol-gfx"
-version = "0.3.0"
+version = "0.0.0"
 dependencies = [
  "cc",
 ]
@@ -3874,7 +3874,7 @@ checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
 
 [[package]]
 name = "xtask"
-version = "0.3.0"
+version = "0.0.0"
 dependencies = [
  "image",
  "libc",

@@ -13,7 +13,8 @@ members = [
 exclude = ["vendor/sokol-rust", "spike"]
 
 [workspace.package]
-version = "0.3.0"
+# No `version`: Launcher's version is set only in product.json, and crates/launcher/build.rs
+# hands it to the binary (LAUNCHER_VERSION). The crates' own versions are unused (0.0.0).
 edition = "2021"
 license = "MIT"
 publish = false
