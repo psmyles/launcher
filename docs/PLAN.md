@@ -1,9 +1,9 @@
 # Launcher - Work Plan
 
 **Status, 5 November 2026:** Asset Check's step 3, Launcher's part, is built: a results table, window
-`--set`, and the window's exit code. All of it is checked on Windows except two clicks in the hook
-flow (see *The gate*). Next is Asset Check's step 4, `asset-check.launcher` in the rules repo, which
-uses the syntax below. The features are generic; Asset Check is their first user.
+`--set`, and the window's exit code. All of it is checked on Windows, the hook flow included (see
+*The gate*). Next is Asset Check's step 4, `asset-check.launcher` in the rules repo, which uses the
+syntax below. The features are generic; Asset Check is their first user.
 
 The 3D Review add-on now runs `3d-review-cli`, 3D Review's console tool, which was renamed from
 `review-cli`.
@@ -76,7 +76,9 @@ steps "commit" when-done="close" exit-code=0 { … }
 - **`launcher FILE --set ID=VALUE`**, repeatable:
   - the values are set before the file's Lua runs, so `rows=(lua)` sees them;
   - they win over remembered values and aren't remembered themselves;
-  - `launcher run` now does the same (it used to work out computed lists before applying `--set`).
+  - `launcher run` now does the same (it used to work out computed lists before applying `--set`);
+  - Lua's `exists` and `read_file` resolve a relative path against the `.launcher` file's folder,
+    not the hook's working folder, so the hook passes the results files as absolute paths.
 - **Exit codes:**
   - `steps … when-done="close" exit-code=N`: a successful run closes the window and Launcher exits N;
   - `window close-code=N`: closing the window any other way (title bar, Alt+F4) exits N;
@@ -113,18 +115,20 @@ steps "commit" when-done="close" exit-code=0 { … }
 - **Done:** a pair of real results files renders as one table, with the run-level group first and no
   file buttons on it. Checked in the window, from a screenshot.
 - **Done:** row and group buttons see their row's fields. Tested in core, in the UI and in e2e.
-- **Done:** a `pre-commit` hook (release build, Git's `sh`) waits for the window, and closing the
-  window blocks the commit (exit 1).
-- **Open:** clicking **Don't commit** (1, blocks) and **Commit anyway** (0, goes through) in that
-  hook flow. The code path is tested (`after_run`, and the e2e cases share `exit-code`), but nobody
-  has clicked it yet.
-  - Try it: the stand-in tool in a scratch repository, with a hook that runs
-    `launcher asset-check.launcher --set fire=… --set review=…` and exits with its code.
+- **Done:** a `pre-commit` hook waits for the window and exits with its code. Checked on Windows on
+  5 November 2026 with the release build, Git's `sh` and the stand-in tool, in a scratch repository.
+  The hook ran `launcher asset-check.launcher --set fire=… --set review=…`, with paths holding spaces:
+  - **Commit anyway** (a real mouse click): exit 0, and the commit landed;
+  - **Don't commit** (a real mouse click): exit 1, and the commit was stopped with the change still
+    staged;
+  - closing the window: exit 1, and the commit was stopped.
 
 ## Still open
 
-- The two clicks above.
 - **Asset Check's spike S1, with Fork itself** (see *Platform*).
+- **`crates/launcher/tests/cli.rs` `version_and_help` fails.** `product.json` says 0.2.1 (since
+  `efc42e5`, before this work) but the workspace `Cargo.toml` still says 0.2.0, and the test looks
+  for Cargo's version in `--version`. Bring the two into line at the release bump.
 - **The visual editor shows a table and keeps it on save, but can't edit it.** Its button tabs list
   only the window's buttons, so a table button's steps can't be reached there.
 - **`docs/theme-reference.kdl` fails its test on Windows.** egui's
@@ -164,19 +168,23 @@ What they hold:
 - **This work is on Windows** (Fork is installed on the development machine). All of it is
   cross-platform, so it can also be built and tested on the Mac.
 - **The hook waits for the window and gets its exit code.** Checked on Windows on 5 November 2026,
-  twice:
+  three times:
   - first with a stand-in GUI-subsystem program;
-  - then with Launcher's own release build and the stand-in tool, where closing the window blocked
-    the commit.
+  - then with Launcher's own release build and the stand-in tool: **Don't commit** and closing the
+    window stopped the commit, and **Commit anyway** let it through;
+  - then committing from Fork: the window opened with its findings, and closing it stopped the
+    commit. Fork then shows its "Git Error" dialog with the hook's output (Asset Check's AC4 and S1).
 
   `docs/LESSONS.md` L2.4 now says that Git's `sh` waits, unlike PowerShell and `cmd`.
-- **Still open, Asset Check's spike S1, with Fork itself:**
-  - whether the window comes to the front over Fork. Windows may refuse a process started in the
-    background; if it does, flash the taskbar button, which Launcher already does for finished runs;
+- **Still open, Asset Check's spike S1, with Fork:**
+  - whether the window comes to the front over Fork by itself. Windows may refuse a process started
+    in the background; if it does, flash the taskbar button, which Launcher already does for
+    finished runs;
   - what Fork shows while the hook waits;
   - whether Fork gives up on a hook that waits for minutes.
 
-  Try it with a real `pre-commit` hook in a scratch repository committed from Fork.
+  The scratch repository is `D:\Dev\hook-try\repo`. Its `pre-commit` hook opens the stand-in tool
+  (copied to `D:\Dev\hook-try\tool`) with this checkout's release build.
 
 ## References
 
