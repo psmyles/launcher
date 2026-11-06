@@ -2,7 +2,7 @@
   "schema": "asset-check.results",
   "version": 1,
   "tool": {
-    "name": "3d-review-cli",
+    "name": "review3d-cli",
     "version": "0.8.0"
   },
   "rules": {
@@ -18,7 +18,7 @@
       "rule": "tool.too_old",
       "severity": "warning",
       "title": "3D Review is too old",
-      "what": "This is 3d-review-cli 0.8.0, but the rules need 0.9.0 or later.",
+      "what": "This is review3d-cli 0.8.0, but the rules need 0.9.0 or later.",
       "why": "An older version may not know every rule the technical artist has set, so files can be checked against the wrong rules, or not at all.",
       "how": "Update 3D Review to version 0.9.0 or later, then check again.",
       "note": null,

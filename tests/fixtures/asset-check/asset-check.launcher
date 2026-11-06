@@ -1,7 +1,7 @@
 // A stand-in for Asset Check's window, to try Launcher's results table on real results files.
-// The two files beside it were written by fire-cli and 3d-review-cli (docs/PLAN.md, Test data).
+// The two files beside it were written by fire-cli and review3d-cli (docs/PLAN.md, Test data).
 //
-//     launcher asset-check.launcher --set fire=results-fire-cli.json --set review=results-3d-review-cli.json
+//     launcher asset-check.launcher --set fire=results-fire-cli.json --set review=results-review3d-cli.json
 //
 // The window exits 1 on "Don't commit" or when it's closed, and 0 on "Commit anyway", as a git
 // hook would read it. The row and group buttons only log what they were given.
@@ -51,7 +51,7 @@ script #"""
 
 window close-code=1 width=720 {
     text "fire" label="fire-cli results" show-if="false"
-    text "review" label="3d-review-cli results" show-if="false"
+    text "review" label="review3d-cli results" show-if="false"
     table "findings" rows=(lua)"findings()" row-label="{title}" group-by="path" group-label="{heading}" icon-from="severity" details="{details}" open=#true height=360 {
         group-button "reveal" label="Show in Explorer" show-if="values.path ~= ''"
         group-button "open" label="Open" show-if="values.path ~= ''"

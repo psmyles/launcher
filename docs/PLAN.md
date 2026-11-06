@@ -7,8 +7,9 @@
 now in `main` (*From step 4's Fork test*). The features are generic; Asset Check is their first
 user.
 
-The 3D Review add-on now runs `3d-review-cli`, 3D Review's console tool, which was renamed from
-`review-cli`.
+The 3D Review add-on now runs `review3d-cli`, 3D Review's console tool. It was `review-cli` up to
+3D Review 0.8.0, and `3d-review-cli` in 0.9.0's pre-release builds, a name PowerShell can't run as
+typed.
 
 ## Context
 
@@ -26,7 +27,7 @@ The design is `docs/asset-check-plan.md` in the rules repo,
 part is decision **AC14**, plus AC4 for the exit code.
 
 **Release order:**
-- The add-on now finds only `3d-review-cli`, which first ships in the 3D Review release after 0.8.0.
+- The add-on now finds only `review3d-cli`, which first ships in the 3D Review release after 0.8.0.
   Release Launcher after that 3D Review release; otherwise 3D Review 0.8.0 users get "3D Review isn't
   installed… or it is too old".
 - **The version is 0.3.0** (`product.json`, the only place it's set), what
@@ -40,7 +41,7 @@ files beside it:
 ```kdl
 window close-code=1 width=720 {
     text "fire" label="fire-cli results" show-if="false"
-    text "review" label="3d-review-cli results" show-if="false"
+    text "review" label="review3d-cli results" show-if="false"
     table "findings" rows=(lua)"findings()" row-label="{title}" group-by="path" group-label="{heading}" icon-from="severity" details="{details}" open=#true height=360 {
         group-button "reveal" label="Show in Explorer" show-if="values.path ~= ''"
         group-button "open" label="Open" show-if="values.path ~= ''"
@@ -188,10 +189,10 @@ results files:
 
 ## Test data
 
-`tests/fixtures/asset-check/results-fire-cli.json` and `results-3d-review-cli.json` were made with the
+`tests/fixtures/asset-check/results-fire-cli.json` and `results-review3d-cli.json` were made with the
 two checkers on 5 November 2026, as below. To make new ones on the Windows machine, where both
 checkers are built (`D:\Dev\fire\target\release\fire-cli.exe` and
-`D:\Dev\3d-review-rs\target\release\3d-review-cli.exe`; rebuild them with
+`D:\Dev\3d-review-rs\target\release\review3d-cli.exe`; rebuild them with
 `cargo build --release -p fire-cli` / `-p review-cli` if they're missing):
 
 1. Make a scratch git repository. Copy asset-rules' `tests/fixtures/project` into it as `rules/`.
@@ -204,12 +205,12 @@ checkers are built (`D:\Dev\fire\target\release\fire-cli.exe` and
 
    ```sh
    fire-cli check --staged --rules rules/rules.json --results .git/asset-check/results-fire-cli.json
-   3d-review-cli audit --staged --rules rules/rules.json --results .git/asset-check/results-3d-review-cli.json
+   review3d-cli audit --staged --rules rules/rules.json --results .git/asset-check/results-review3d-cli.json
    ```
 
 What they hold:
 - **A `file.no_profile` finding** for the unmatched name. Its `profile_label` and `stage` are `null`.
-- **A run-level `tool.too_old` finding** from `3d-review-cli` 0.8.0 (the fixture requires 0.9.0).
+- **A run-level `tool.too_old` finding** from `review3d-cli` 0.8.0 (the fixture requires 0.9.0).
 - **A colour-profile warning:** Launcher's own `assets/application-logo.png` is Display P3.
 - **Two info findings** on the model.
 

@@ -8,7 +8,7 @@
 //! * the per-file lock blocks a second run of the same file, not of a different one;
 //! * a dry run lists the commands and starts nothing;
 //! * env-from carries a setup script's variables into later steps.
-//! * a results table: rows from two real results files (fire-cli's and 3d-review-cli's) reach a
+//! * a results table: rows from two real results files (fire-cli's and review3d-cli's) reach a
 //!   step as the row a group button and a row button choose;
 //! * a run that closes the window exits with the code it chose, and closing the window (Windows)
 //!   exits with the tool's close-code.
@@ -364,7 +364,7 @@ fn asset_check(e: &Env, extra: &[&str]) -> Output {
     let fire = format!("fire={}", dir.join("results-fire-cli.json").display());
     let review = format!(
         "review={}",
-        dir.join("results-3d-review-cli.json").display()
+        dir.join("results-review3d-cli.json").display()
     );
     let mut args = vec!["--set", &fire, "--set", &review];
     args.extend_from_slice(extra);

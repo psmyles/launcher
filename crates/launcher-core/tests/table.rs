@@ -183,8 +183,8 @@ fn opened() -> (Arc<MockEffects>, Evaluator, Form) {
     let fx = Arc::new(MockEffects::default());
     fx.add_file("results-fire-cli.json", &fixture("results-fire-cli.json"));
     fx.add_file(
-        "results-3d-review-cli.json",
-        &fixture("results-3d-review-cli.json"),
+        "results-review3d-cli.json",
+        &fixture("results-review3d-cli.json"),
     );
     let mut form = Form::new(
         config.clone(),
@@ -194,7 +194,7 @@ fn opened() -> (Arc<MockEffects>, Evaluator, Form) {
     );
     form.set_for_launch("fire", "results-fire-cli.json")
         .unwrap();
-    form.set_for_launch("review", "results-3d-review-cli.json")
+    form.set_for_launch("review", "results-review3d-cli.json")
         .unwrap();
     let mut ev = Evaluator::new((*config).clone(), fx.clone(), trust::assume()).unwrap();
     let results = ev.load(form.snapshot().clone());
@@ -252,7 +252,7 @@ fn two_results_files_make_one_table_with_the_run_level_group_first() {
     );
     let details = table::field(&rows[0], "details");
     assert!(
-        details.starts_with("This is 3d-review-cli 0.8.0"),
+        details.starts_with("This is review3d-cli 0.8.0"),
         "{details}"
     );
     assert!(details.contains("\nHow: Update 3D Review"), "{details}");

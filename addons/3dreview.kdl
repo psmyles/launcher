@@ -1,6 +1,6 @@
 // 3D Review: optimize and check FBX models, and open them in the viewer.
 //
-// The work is done by 3d-review-cli, the console tool installed beside the viewer. Its
+// The work is done by review3d-cli, the console tool installed beside the viewer. Its
 // command line, exit codes and report are documented in 3D Review's docs/cli.md, and
 // it keeps the CLI contract (N32): exit 2 when it cannot follow the command line, 0
 // only when everything worked, 1 otherwise, and a --report file whose top-level
@@ -67,19 +67,19 @@ add-on "review3d" name="3D Review" version="1.0" requires="0.2" icon="cube" {
                 end
             end
             local function cli()
-                local ok, found = pcall(capture, os.name == "windows" and "where" or "which", "3d-review-cli")
+                local ok, found = pcall(capture, os.name == "windows" and "where" or "which", "review3d-cli")
                 if ok and given(found) then return trim(split(found, "\n")[1]) end
                 local place = install()
-                local tool = place and (os.name == "windows" and path.join(place, "3d-review-cli.exe")
-                    or path.join(place, "Contents", "MacOS", "3d-review-cli"))
+                local tool = place and (os.name == "windows" and path.join(place, "review3d-cli.exe")
+                    or path.join(place, "Contents", "MacOS", "review3d-cli"))
                 if tool and exists(tool) then return tool end
-                fail("3D Review isn't installed on this computer, or it is too old to have 3d-review-cli. Install the latest 3D Review, then try again.")
+                fail("3D Review isn't installed on this computer, or it is too old to have review3d-cli. Install the latest 3D Review, then try again.")
             end
-            -- Run 3d-review-cli and read its report: the report, and how it ended.
+            -- Run review3d-cli and read its report: the report, and how it ended.
             local function review(args, keep)
                 local tool = cli()
                 local report = given(keep) and path.absolute(keep) or path.join(env.TEMP or env.TMPDIR or config_dir,
-                    string.format("3d-review-cli-%d-%d.json", os.time(), math.floor(os.clock() * 1000000)))
+                    string.format("review3d-cli-%d-%d.json", os.time(), math.floor(os.clock() * 1000000)))
                 -- No --progress-bar on until Launcher reads OSC 9;4 (slice 5): before then it
                 -- would reach a headless run's own terminal, where some show it as noise.
                 for _, word in ipairs({ "--report", report }) do table.insert(args, word) end
@@ -179,19 +179,19 @@ add-on "review3d" name="3D Review" version="1.0" requires="0.2" icon="cube" {
                 end
             end
             local function cli()
-                local ok, found = pcall(capture, os.name == "windows" and "where" or "which", "3d-review-cli")
+                local ok, found = pcall(capture, os.name == "windows" and "where" or "which", "review3d-cli")
                 if ok and given(found) then return trim(split(found, "\n")[1]) end
                 local place = install()
-                local tool = place and (os.name == "windows" and path.join(place, "3d-review-cli.exe")
-                    or path.join(place, "Contents", "MacOS", "3d-review-cli"))
+                local tool = place and (os.name == "windows" and path.join(place, "review3d-cli.exe")
+                    or path.join(place, "Contents", "MacOS", "review3d-cli"))
                 if tool and exists(tool) then return tool end
-                fail("3D Review isn't installed on this computer, or it is too old to have 3d-review-cli. Install the latest 3D Review, then try again.")
+                fail("3D Review isn't installed on this computer, or it is too old to have review3d-cli. Install the latest 3D Review, then try again.")
             end
-            -- Run 3d-review-cli and read its report: the report, and how it ended.
+            -- Run review3d-cli and read its report: the report, and how it ended.
             local function review(args, keep)
                 local tool = cli()
                 local report = given(keep) and path.absolute(keep) or path.join(env.TEMP or env.TMPDIR or config_dir,
-                    string.format("3d-review-cli-%d-%d.json", os.time(), math.floor(os.clock() * 1000000)))
+                    string.format("review3d-cli-%d-%d.json", os.time(), math.floor(os.clock() * 1000000)))
                 -- No --progress-bar on until Launcher reads OSC 9;4 (slice 5): before then it
                 -- would reach a headless run's own terminal, where some show it as noise.
                 for _, word in ipairs({ "--report", report }) do table.insert(args, word) end
@@ -270,19 +270,19 @@ add-on "review3d" name="3D Review" version="1.0" requires="0.2" icon="cube" {
                 end
             end
             local function cli()
-                local ok, found = pcall(capture, os.name == "windows" and "where" or "which", "3d-review-cli")
+                local ok, found = pcall(capture, os.name == "windows" and "where" or "which", "review3d-cli")
                 if ok and given(found) then return trim(split(found, "\n")[1]) end
                 local place = install()
-                local tool = place and (os.name == "windows" and path.join(place, "3d-review-cli.exe")
-                    or path.join(place, "Contents", "MacOS", "3d-review-cli"))
+                local tool = place and (os.name == "windows" and path.join(place, "review3d-cli.exe")
+                    or path.join(place, "Contents", "MacOS", "review3d-cli"))
                 if tool and exists(tool) then return tool end
-                fail("3D Review isn't installed on this computer, or it is too old to have 3d-review-cli. Install the latest 3D Review, then try again.")
+                fail("3D Review isn't installed on this computer, or it is too old to have review3d-cli. Install the latest 3D Review, then try again.")
             end
-            -- Run 3d-review-cli and read its report: the report, and how it ended.
+            -- Run review3d-cli and read its report: the report, and how it ended.
             local function review(args, keep)
                 local tool = cli()
                 local report = given(keep) and path.absolute(keep) or path.join(env.TEMP or env.TMPDIR or config_dir,
-                    string.format("3d-review-cli-%d-%d.json", os.time(), math.floor(os.clock() * 1000000)))
+                    string.format("review3d-cli-%d-%d.json", os.time(), math.floor(os.clock() * 1000000)))
                 -- No --progress-bar on until Launcher reads OSC 9;4 (slice 5): before then it
                 -- would reach a headless run's own terminal, where some show it as noise.
                 for _, word in ipairs({ "--report", report }) do table.insert(args, word) end
